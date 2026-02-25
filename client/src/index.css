@@ -53,39 +53,39 @@
 
 :root {
   --radius: 0.5rem;
-  /* 深色工业仪表盘主题 */
-  --background: oklch(0.09 0.02 240);
-  --foreground: oklch(0.92 0.01 220);
-  --card: oklch(0.13 0.02 240);
-  --card-foreground: oklch(0.92 0.01 220);
-  --popover: oklch(0.13 0.02 240);
-  --popover-foreground: oklch(0.92 0.01 220);
-  --primary: oklch(0.72 0.18 210);
-  --primary-foreground: oklch(0.09 0.02 240);
-  --secondary: oklch(0.18 0.02 240);
-  --secondary-foreground: oklch(0.80 0.01 220);
-  --muted: oklch(0.16 0.015 240);
-  --muted-foreground: oklch(0.55 0.02 220);
-  --accent: oklch(0.72 0.18 210);
-  --accent-foreground: oklch(0.09 0.02 240);
-  --destructive: oklch(0.60 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.22 0.02 240);
-  --input: oklch(0.18 0.02 240);
-  --ring: oklch(0.72 0.18 210);
-  --chart-1: oklch(0.72 0.18 210);
-  --chart-2: oklch(0.72 0.18 145);
-  --chart-3: oklch(0.75 0.18 55);
-  --chart-4: oklch(0.65 0.20 300);
-  --chart-5: oklch(0.65 0.20 25);
-  --sidebar: oklch(0.11 0.02 240);
-  --sidebar-foreground: oklch(0.92 0.01 220);
-  --sidebar-primary: oklch(0.72 0.18 210);
-  --sidebar-primary-foreground: oklch(0.09 0.02 240);
-  --sidebar-accent: oklch(0.18 0.02 240);
-  --sidebar-accent-foreground: oklch(0.92 0.01 220);
-  --sidebar-border: oklch(0.22 0.02 240);
-  --sidebar-ring: oklch(0.72 0.18 210);
+  /* 亮色主题 — 白底蓝强调 */
+  --background: oklch(0.97 0.005 240);
+  --foreground: oklch(0.18 0.02 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 240);
+  --primary: oklch(0.52 0.22 255);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0.01 240);
+  --secondary-foreground: oklch(0.30 0.03 240);
+  --muted: oklch(0.94 0.01 240);
+  --muted-foreground: oklch(0.52 0.03 240);
+  --accent: oklch(0.94 0.01 240);
+  --accent-foreground: oklch(0.30 0.03 240);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.88 0.01 240);
+  --input: oklch(0.94 0.01 240);
+  --ring: oklch(0.52 0.22 255);
+  --chart-1: oklch(0.52 0.22 255);
+  --chart-2: oklch(0.62 0.18 145);
+  --chart-3: oklch(0.72 0.18 55);
+  --chart-4: oklch(0.58 0.20 300);
+  --chart-5: oklch(0.58 0.20 25);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.18 0.02 240);
+  --sidebar-primary: oklch(0.52 0.22 255);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.94 0.01 240);
+  --sidebar-accent-foreground: oklch(0.30 0.03 240);
+  --sidebar-border: oklch(0.88 0.01 240);
+  --sidebar-ring: oklch(0.52 0.22 255);
 }
 
 @layer base {
@@ -140,32 +140,28 @@
 
   /* 游戏专用样式 */
   .game-card {
-    @apply bg-card border border-border rounded-lg p-4;
-    background: linear-gradient(135deg, oklch(0.14 0.025 240), oklch(0.11 0.02 240));
-    box-shadow: 0 1px 3px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(1 0 0 / 0.04);
+    @apply bg-card border border-border rounded-xl p-5;
+    box-shadow: 0 1px 4px oklch(0 0 0 / 0.08), 0 0 0 1px oklch(0 0 0 / 0.04);
   }
 
-  .game-input {
-    @apply bg-input border border-border rounded px-3 py-2 text-foreground font-mono text-sm;
-    @apply focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary;
+   .game-input {
+    @apply bg-white border border-border rounded px-2 py-1.5 text-foreground font-mono text-sm;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary;
     @apply transition-colors;
-    width: 90px;
+    width: 80px;
   }
-
   .game-input:hover {
-    @apply border-primary/50;
+    @apply border-primary/60;
   }
 
-  .constraint-ok {
-    @apply text-emerald-400 border-emerald-400/30 bg-emerald-400/5;
+   .constraint-ok {
+    @apply text-emerald-600 border-emerald-200 bg-emerald-50;
   }
-
   .constraint-warn {
-    @apply text-amber-400 border-amber-400/30 bg-amber-400/5;
+    @apply text-amber-600 border-amber-200 bg-amber-50;
   }
-
   .constraint-err {
-    @apply text-red-400 border-red-400/30 bg-red-400/5;
+    @apply text-red-600 border-red-200 bg-red-50;
   }
 
   .cost-badge {
@@ -173,7 +169,7 @@
   }
 
   .progress-bar {
-    @apply h-1.5 rounded-full bg-border overflow-hidden;
+    @apply h-2 rounded-full bg-slate-100 overflow-hidden;
   }
 
   .progress-fill {
@@ -181,20 +177,22 @@
   }
 
   /* 脉冲动画（用于约束违反提示） */
-  @keyframes pulse-border {
-    0%, 100% { border-color: oklch(0.60 0.22 25 / 0.5); }
-    50% { border-color: oklch(0.60 0.22 25 / 1); }
-  }
   .animate-pulse-border {
     animation: pulse-border 2s ease-in-out infinite;
   }
 
   /* 数字滚动动画 */
-  @keyframes count-up {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
   .animate-count {
     animation: count-up 0.4s ease-out forwards;
   }
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: oklch(0.58 0.22 25 / 0.5); }
+  50% { border-color: oklch(0.58 0.22 25 / 1); }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

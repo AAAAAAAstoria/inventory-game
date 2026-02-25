@@ -1,14 +1,25 @@
 /**
  * Home.tsx — 库存运输决策教学游戏主界面
- * 
- * 设计语言：工业运营仪表盘（深色主题）
+ *
+ * 设计语言：白色背景亮色主题（第一版风格）
  * 决策层：系列级 × 门店组级（降维后 3仓库 × 2门店组 × 6系列 = 36个决策点）
  * 后台：完整 SKU×门店 计算（3×10×30）
  */
-
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+} from 'recharts';
 import {
   RAW_GAME_DATA,
   calculate,
@@ -31,33 +42,61 @@ import {
 
 const DATA = RAW_GAME_DATA as unknown as GameData;
 
-// ─── 子组件：顶部 HUD ──────────────────────────────────────────
-function GameHUD({ stage, round }: { stage: 1 | 2; round: string }) {
+// ─── 仓库库存柱状图数据 ──────────────────────────────────────
+function useWarehouseChartData() {
+  return useMemo(() => {
+    const seriesList = getSeriesList(DATA);
+    const whInv = aggregateWarehouseInventory(DATA);
+    return DATA.warehouses.map(wh => {
+      const row: Record<string, string | number> = { name: wh };
+      for (const series of seriesList) {
+        row[series] = whInv[wh]?.[series] ?? 0;
+      }
+      return row;
+    });
+  }, []);
+}
+
+// ─── 门店需求柱状图数据 ──────────────────────────────────────
+function useStoreChartData() {
+  return useMemo(() => {
+    return DATA.stores.map(store => {
+      const demand = Object.values(DATA.demand[store] ?? {}).reduce((s, v) => s + v, 0);
+      const inv = Object.values(DATA.current_store_inventory[store] ?? {}).reduce((s, v) => s + v, 0);
+      const shortName = store
+        .replace('直营店', '')
+        .replace('超市', '')
+        .replace('(', '(')
+        .replace(')', ')');
+      return { name: shortName, 月需求量: demand, 当前库存: inv };
+    });
+  }, []);
+}
+
+// ─── 子组件：顶部导航栏 ──────────────────────────────────────
+function TopNav({ stage, round }: { stage: 1 | 2; round: string }) {
   return (
-    <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
+    <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center">
-          <span className="text-primary text-sm font-bold">📦</span>
-        </div>
+        <span className="text-xl">📦</span>
         <div>
-          <h1 className="text-sm font-semibold text-foreground leading-none">库存运输决策教学游戏</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">多仓库 · 多门店 · 多SKU</p>
+          <h1 className="text-sm font-bold text-gray-900 leading-none">库存运输决策教学游戏</h1>
+          <p className="text-xs text-gray-500 mt-0.5">多仓库 · 多门店 · 多SKU</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span className={`px-3 py-1 rounded-full text-xs font-mono font-semibold border ${
-          stage === 1
-            ? 'bg-primary/10 text-primary border-primary/30'
-            : 'bg-amber-400/10 text-amber-400 border-amber-400/30'
-        }`}>
+      <div className="flex items-center gap-3">
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+            stage === 1
+              ? 'bg-blue-50 text-blue-700 border-blue-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200'
+          }`}
+        >
           {round}
-        </span>
-        <span className="text-xs text-muted-foreground hidden sm:block">
-          3仓库 × 2门店组 × 6系列
         </span>
         <a
           href="/files"
-          className="ml-2 px-3 py-1 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors flex items-center gap-1"
+          className="px-3 py-1 rounded border border-gray-200 text-xs text-gray-500 hover:text-gray-800 hover:border-blue-300 transition-colors flex items-center gap-1"
         >
           <span>📁</span>
           <span className="hidden sm:inline">文件库</span>
@@ -67,20 +106,441 @@ function GameHUD({ stage, round }: { stage: 1 | 2; round: string }) {
   );
 }
 
-// ─── 子组件：仓库库存卡片 ──────────────────────────────────────
+// ─── 子组件：Hero 横幅 ──────────────────────────────────────
+function HeroBanner({ stage }: { stage: 1 | 2 }) {
+  return (
+    <div
+      className="relative overflow-hidden px-8 py-8"
+      style={{
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 30%, #0891b2 70%, #0d9488 100%)',
+      }}
+    >
+      {/* 装饰圆形 */}
+      <div
+        className="absolute top-[-60px] right-[-60px] w-48 h-48 rounded-full opacity-10"
+        style={{ background: 'radial-gradient(circle, #ffffff 0%, transparent 70%)' }}
+      />
+      <div
+        className="absolute bottom-[-40px] left-[30%] w-32 h-32 rounded-full opacity-10"
+        style={{ background: 'radial-gradient(circle, #ffffff 0%, transparent 70%)' }}
+      />
+
+      <h2 className="text-2xl font-bold text-white mb-4">欢迎来到库存运输决策挑战</h2>
+
+      <div className="bg-white/15 backdrop-blur-sm rounded-xl px-5 py-4 mb-6 max-w-3xl">
+        <p className="text-white/90 text-sm leading-relaxed">
+          你的目标 🎯：在满足限制要求的前提下，合理安排仓库向各门店的补货数量，使公司当月的总运营成本最低。
+        </p>
+        <p className="text-white/80 text-sm leading-relaxed mt-2">
+          在接下来的游戏中，你将通过{' '}
+          <span className="bg-blue-500/60 text-white font-bold px-1.5 py-0.5 rounded text-xs">3</span>{' '}
+          轮决策与反馈，逐步体验在复杂业务环境下进行库存与配送优化的挑战，并理解运筹优化方法在真实商业决策中的价值。
+        </p>
+      </div>
+
+      {/* 轮次标签 */}
+      <div className="flex gap-3 flex-wrap">
+        <span
+          className={`px-4 py-1.5 rounded-full text-sm font-medium border ${
+            stage === 1
+              ? 'bg-white text-blue-700 border-white'
+              : 'bg-white/20 text-white/80 border-white/30'
+          }`}
+        >
+          第一轮：基础库存决策
+        </span>
+        <span
+          className={`px-4 py-1.5 rounded-full text-sm font-medium border ${
+            stage === 2
+              ? 'bg-white text-blue-700 border-white'
+              : 'bg-white/20 text-white/80 border-white/30'
+          }`}
+        >
+          第二轮：多约束优化决策
+        </span>
+        <span className="px-4 py-1.5 rounded-full text-sm font-medium border bg-white/10 text-white/50 border-white/20 cursor-not-allowed">
+          第三轮：优化求解器（即将开放）
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── 子组件：步骤标签页 ──────────────────────────────────────
+function StepTabs({ stage }: { stage: 1 | 2 }) {
+  return (
+    <div className="grid grid-cols-3 border-b border-gray-200 bg-white">
+      {/* 步骤1 */}
+      <div
+        className={`flex flex-col items-center py-5 border-b-2 transition-colors ${
+          stage === 1
+            ? 'border-blue-600 bg-blue-600 text-white'
+            : 'border-transparent text-gray-400'
+        }`}
+      >
+        <span className="text-3xl font-bold leading-none">1</span>
+        <span className="text-sm font-medium mt-1">基础库存决策</span>
+      </div>
+      {/* 步骤2 */}
+      <div
+        className={`flex flex-col items-center py-5 border-b-2 transition-colors border-r border-l border-gray-100 ${
+          stage === 2
+            ? 'border-blue-600 bg-blue-600 text-white'
+            : 'border-transparent text-gray-400'
+        }`}
+      >
+        <span className="text-3xl font-bold leading-none">2</span>
+        <span className="text-sm font-medium mt-1">多约束优化决策</span>
+      </div>
+      {/* 步骤3 */}
+      <div className="flex flex-col items-center py-5 border-b-2 border-transparent text-gray-300">
+        <span className="text-3xl font-bold leading-none">3</span>
+        <span className="text-sm font-medium mt-1">优化求解器</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── 子组件：统计卡片行 ──────────────────────────────────────
+function StatsRow() {
+  const totalInventory = useMemo(() => {
+    return DATA.warehouses.reduce((sum, wh) => {
+      return sum + Object.values(DATA.warehouse_inventory[wh] ?? {}).reduce((s, v) => s + v, 0);
+    }, 0);
+  }, []);
+
+  const stats = [
+    { label: '仓库数量', value: DATA.warehouses.length, unit: '个', color: 'text-blue-600' },
+    { label: '门店数量', value: DATA.stores.length, unit: '家', color: 'text-blue-600' },
+    { label: 'SKU种类', value: DATA.skus.length, unit: '种', color: 'text-blue-600' },
+    {
+      label: '仓库总库存',
+      value: totalInventory.toLocaleString(),
+      unit: '件',
+      color: 'text-blue-600',
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-6 py-4 bg-gray-50">
+      {stats.map(stat => (
+        <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="text-xs text-gray-500 mb-2">{stat.label}</div>
+          <div className="flex items-baseline gap-1">
+            <span className={`text-3xl font-bold ${stat.color}`}>{stat.value}</span>
+            <span className="text-sm text-gray-500">{stat.unit}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── 子组件：两个 Recharts 柱状图 ──────────────────────────────
+function ChartsRow() {
+  const warehouseData = useWarehouseChartData();
+  const storeData = useStoreChartData();
+  const seriesList = useMemo(() => getSeriesList(DATA), []);
+
+  // 截短仓库名
+  const whShortNames: Record<string, string> = {
+    上海奉贤仓储中心: '上海奉贤仓储中心',
+    嘉定配送中心: '嘉定配送中心',
+    松江物流园: '松江物流园',
+  };
+
+  const warehouseDataShort = warehouseData.map(row => ({
+    ...row,
+    name: whShortNames[row.name as string] ?? row.name,
+  }));
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-b border-gray-200">
+      {/* 左图：仓库库存水平 */}
+      <div className="bg-white p-6 border-r border-gray-200">
+        <h3 className="text-base font-semibold text-gray-900 mb-1">仓库可用库存水平</h3>
+        <p className="text-xs text-gray-500 mb-4">3个仓库各系列库存分布（件）</p>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={warehouseDataShort} margin={{ top: 5, right: 10, left: 10, bottom: 40 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 11, fill: '#6b7280' }}
+              angle={-15}
+              textAnchor="end"
+              height={60}
+            />
+            <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} label={{ value: '库存量（件）', angle: -90, position: 'insideLeft', offset: -5, style: { fontSize: 11, fill: '#9ca3af' } }} />
+            <Tooltip
+              formatter={(value: number, name: string) => [value.toLocaleString() + ' 件', name]}
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value: string) => value.replace('系列(直营店特供)', '(直营特供)').replace('系列', '')}
+            />
+            {seriesList.map(series => (
+              <Bar key={series} dataKey={series} stackId="a" fill={SERIES_COLORS[series]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* 右图：门店需求规模 */}
+      <div className="bg-white p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-1">门店需求规模</h3>
+        <p className="text-xs text-gray-500 mb-4">10家门店月需求量 vs 当前库存（件）</p>
+        <ResponsiveContainer width="100%" height={300}>
+          <ComposedChart data={storeData} margin={{ top: 5, right: 10, left: 10, bottom: 60 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 10, fill: '#6b7280' }}
+              angle={-30}
+              textAnchor="end"
+              height={70}
+              interval={0}
+            />
+            <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} label={{ value: '数量（件）', angle: -90, position: 'insideLeft', offset: -5, style: { fontSize: 11, fill: '#9ca3af' } }} />
+            <Tooltip
+              formatter={(value: number, name: string) => [value.toLocaleString() + ' 件', name]}
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+            />
+            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+            <Bar dataKey="月需求量" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
+            <Line
+              type="monotone"
+              dataKey="当前库存"
+              stroke="#f59e0b"
+              strokeWidth={2}
+              dot={{ fill: '#f59e0b', r: 3 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─── 子组件：约束说明区 ──────────────────────────────────────
+function ConstraintInfo({ stage }: { stage: 1 | 2 }) {
+  return (
+    <div className="bg-white border-b border-gray-200 px-6 py-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-bold text-gray-900">
+            {stage === 1 ? '第一轮：基础库存决策' : '第二轮：多约束优化决策'}
+          </h3>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {stage === 1
+              ? '仓库库存约束 · 最小化运输成本 + 缺货成本'
+              : '全约束激活 · 最小化总成本（运输+缺货+持货+惩罚）'}
+          </p>
+        </div>
+        <a
+          href="#decision"
+          className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+        >
+          仓库库存约束 →
+        </a>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 本轮约束条件 */}
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">本轮约束条件</h4>
+          <div className="space-y-2">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm text-amber-800">
+                <span className="font-semibold">C1 仓库库存约束：</span>
+                各仓库每个SKU的发货总量不能超过其当前可用库存。
+              </p>
+            </div>
+            {stage === 2 && (
+              <>
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                  <p className="text-sm text-red-800">
+                    <span className="font-semibold">C2 安全库存约束（HARD）：</span>
+                    仓库月末库存不得低于安全库存下限。
+                  </p>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-semibold">C3 直营店容量（HARD）：</span>
+                    月末库存 ≤ 仓储容量上限。
+                  </p>
+                </div>
+                <div className="rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
+                  <p className="text-sm text-purple-800">
+                    <span className="font-semibold">C4 直营店预算（SOFT）：</span>
+                    运输成本 ≤ 月度预算（违反产生惩罚成本）。
+                  </p>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                  <p className="text-sm text-green-800">
+                    <span className="font-semibold">C5 商超进货上限（HARD）：</span>
+                    月进货量 ≤ 商超合同上限。
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 目标函数 */}
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">目标函数</h4>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+            <p className="text-sm font-semibold text-gray-800 mb-3">
+              最小化总成本 = 运输成本 + 缺货成本{stage === 2 ? ' + 持货成本 + 软约束惩罚' : ''}
+            </p>
+            <ul className="space-y-1.5 text-sm text-gray-600">
+              <li>• 运输成本 = Σ 配送量 × 单位运输成本</li>
+              <li>• 缺货成本 = Σ max(0, 需求 − 库存 − 补货) × 缺货惩罚</li>
+              {stage === 2 && (
+                <>
+                  <li>• 持货成本 = Σ 月末库存 × 单位持货成本</li>
+                  <li>• 软约束惩罚 = C2违反惩罚 + C4违反惩罚</li>
+                </>
+              )}
+            </ul>
+          </div>
+
+          {stage === 2 && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <h5 className="text-xs font-semibold text-amber-800 mb-2">运输方式（第二轮可选）</h5>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-start gap-1.5">
+                  <span>📦</span>
+                  <div>
+                    <div className="font-medium text-amber-800">箱式运输</div>
+                    <div className="text-amber-700">无最低量，成本 ×1.0</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span>🔲</span>
+                  <div>
+                    <div className="font-medium text-amber-800">托盘运输</div>
+                    <div className="text-amber-700">最低 50 件，成本 ×0.85</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 子组件：第二轮约束详情面板 ──────────────────────────────
+function Stage2ConstraintsPanel() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="bg-white rounded-xl border border-amber-200 p-5 shadow-sm">
+      <button
+        className="flex items-center justify-between w-full"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-amber-500">⚡</span>
+          <h2 className="text-sm font-semibold text-amber-700">第二轮新增约束详情</h2>
+        </div>
+        <span className="text-gray-400 text-xs">{expanded ? '▲ 收起' : '▼ 展开'}</span>
+      </button>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 直营店约束 */}
+                <div className="rounded-lg border border-gray-200 p-3">
+                  <div className="text-xs font-semibold text-gray-700 mb-2">直营店约束</div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-400">
+                        <th className="text-left pb-1">门店</th>
+                        <th className="text-right pb-1">仓储容量</th>
+                        <th className="text-right pb-1">月度预算</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {DATA.direct_stores.map(store => {
+                        const c = DATA.direct_store_constraints[store];
+                        return (
+                          <tr key={store} className="border-t border-gray-100">
+                            <td className="py-1 text-gray-500 truncate max-w-[100px]">{store}</td>
+                            <td className="py-1 text-right font-mono text-gray-700">
+                              {c?.storage_capacity ?? '∞'}
+                            </td>
+                            <td className="py-1 text-right font-mono text-gray-700">
+                              ¥{c?.monthly_budget?.toLocaleString() ?? '∞'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="mt-2 text-[10px] text-gray-400">
+                    C3(HARD)：月末库存≤仓储容量 | C4(SOFT)：运输成本≤月度预算
+                  </div>
+                </div>
+                {/* 商超约束 */}
+                <div className="rounded-lg border border-gray-200 p-3">
+                  <div className="text-xs font-semibold text-gray-700 mb-2">
+                    商超进货上限 (C5 HARD)
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-400">
+                        <th className="text-left pb-1">门店</th>
+                        <th className="text-right pb-1">月进货上限</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {DATA.supermarkets.map(store => {
+                        const c = DATA.supermarket_constraints[store];
+                        return (
+                          <tr key={store} className="border-t border-gray-100">
+                            <td className="py-1 text-gray-500 truncate max-w-[120px]">{store}</td>
+                            <td className="py-1 text-right font-mono text-gray-700">
+                              {c?.monthly_order_limit ?? '∞'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── 子组件：仓库库存侧边卡片 ──────────────────────────────────
 function WarehousePanel({ stage }: { stage: 1 | 2 }) {
   const seriesList = useMemo(() => getSeriesList(DATA), []);
   const whInv = useMemo(() => aggregateWarehouseInventory(DATA), []);
   const whSafety = useMemo(() => aggregateSafetyStock(DATA), []);
 
   return (
-    <div className="game-card">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-primary text-base">🏭</span>
-        <h2 className="text-sm font-semibold text-foreground">仓库可用库存</h2>
+        <span className="text-blue-600 text-base">🏭</span>
+        <h2 className="text-sm font-semibold text-gray-800">仓库可用库存</h2>
         {stage === 2 && (
-          <span className="ml-auto text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
-            第二轮：需保留安全库存
+          <span className="ml-auto text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+            需保留安全库存
           </span>
         )}
       </div>
@@ -93,15 +553,15 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
           return (
             <div key={wh} className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground truncate max-w-[120px]">{wh}</span>
-                <span className="font-mono text-xs text-foreground">
-                  <span className="text-primary font-semibold">{usable.toLocaleString()}</span>
-                  <span className="text-muted-foreground">/{totalInv.toLocaleString()}</span>
+                <span className="text-xs text-gray-500 truncate max-w-[120px]">{wh}</span>
+                <span className="font-mono text-xs text-gray-700">
+                  <span className="text-blue-600 font-semibold">{usable.toLocaleString()}</span>
+                  <span className="text-gray-400">/{totalInv.toLocaleString()}</span>
                 </span>
               </div>
-              <div className="progress-bar">
+              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                 <div
-                  className="progress-fill"
+                  className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${pct}%`,
                     background: pct > 60 ? '#22c55e' : pct > 30 ? '#f59e0b' : '#ef4444',
@@ -109,7 +569,9 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
                 />
               </div>
               {stage === 2 && (
-                <div className="text-xs text-amber-400/70">安全库存下限：{totalSafety.toLocaleString()} 件</div>
+                <div className="text-xs text-amber-600/80">
+                  安全库存下限：{totalSafety.toLocaleString()} 件
+                </div>
               )}
             </div>
           );
@@ -119,17 +581,17 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
   );
 }
 
-// ─── 子组件：门店组需求卡片 ────────────────────────────────────
+// ─── 子组件：门店组需求侧边卡片 ──────────────────────────────
 function DemandPanel() {
   const seriesList = useMemo(() => getSeriesList(DATA), []);
   const groupDemand = useMemo(() => aggregateGroupDemand(DATA), []);
   const groupInv = useMemo(() => aggregateGroupCurrentInventory(DATA), []);
 
   return (
-    <div className="game-card">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-primary text-base">🏪</span>
-        <h2 className="text-sm font-semibold text-foreground">门店需求概览</h2>
+        <span className="text-blue-600 text-base">🏪</span>
+        <h2 className="text-sm font-semibold text-gray-800">门店需求概览</h2>
       </div>
       <div className="space-y-4">
         {['直营组', '商超组'].map(group => {
@@ -142,15 +604,18 @@ function DemandPanel() {
                 <div className="flex items-center gap-1.5">
                   <span
                     className="w-2 h-2 rounded-full"
-                    style={{ background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS] }}
+                    style={{
+                      background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS],
+                    }}
                   />
-                  <span className="text-xs font-medium text-foreground">{group}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs font-medium text-gray-700">{group}</span>
+                  <span className="text-xs text-gray-400">
                     ({group === '直营组' ? '3家' : '7家'})
                   </span>
                 </div>
-                <span className="font-mono text-xs text-foreground">
-                  净需求 <span className="text-primary font-semibold">{netNeed.toLocaleString()}</span> 件
+                <span className="font-mono text-xs text-gray-700">
+                  净需求{' '}
+                  <span className="text-blue-600 font-semibold">{netNeed.toLocaleString()}</span> 件
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-1">
@@ -164,12 +629,20 @@ function DemandPanel() {
                       <div
                         key={sr}
                         className="rounded px-1.5 py-1 text-center"
-                        style={{ background: `${SERIES_COLORS[sr]}15`, border: `1px solid ${SERIES_COLORS[sr]}30` }}
+                        style={{
+                          background: `${SERIES_COLORS[sr]}15`,
+                          border: `1px solid ${SERIES_COLORS[sr]}30`,
+                        }}
                       >
                         <div className="text-xs" style={{ color: SERIES_COLORS[sr] }}>
                           {SERIES_ICONS[sr]}
                         </div>
-                        <div className="font-mono text-xs text-foreground font-semibold">{net}</div>
+                        <div
+                          className="font-mono text-xs font-semibold"
+                          style={{ color: SERIES_COLORS[sr] }}
+                        >
+                          {net}
+                        </div>
                       </div>
                     );
                   })}
@@ -217,13 +690,13 @@ function DecisionTable({
   }, [decisions, seriesList]);
 
   return (
-    <div className="game-card overflow-x-auto">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-primary text-base">📋</span>
-        <h2 className="text-sm font-semibold text-foreground">配送决策</h2>
-        <span className="text-xs text-muted-foreground ml-1">（单位：件）</span>
+        <span className="text-blue-600 text-base">📋</span>
+        <h2 className="text-sm font-semibold text-gray-800">配送决策</h2>
+        <span className="text-xs text-gray-400 ml-1">（单位：件）</span>
         {stage === 2 && (
-          <span className="ml-auto text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+          <span className="ml-auto text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
             第二轮新增约束已激活
           </span>
         )}
@@ -238,7 +711,10 @@ function DecisionTable({
               <div
                 key={series}
                 className="text-center text-xs font-medium py-1 px-1 rounded"
-                style={{ color: SERIES_COLORS[series], background: `${SERIES_COLORS[series]}15` }}
+                style={{
+                  color: SERIES_COLORS[series],
+                  background: `${SERIES_COLORS[series]}15`,
+                }}
               >
                 <div>{SERIES_ICONS[series]}</div>
                 <div className="truncate text-[10px] leading-tight mt-0.5">
@@ -253,8 +729,8 @@ function DecisionTable({
         {DATA.warehouses.map(wh => (
           <div key={wh} className="mb-4">
             {/* 仓库标题行 */}
-            <div className="flex items-center gap-2 mb-2 py-1 border-b border-border/50">
-              <span className="text-xs font-semibold text-primary w-[140px] truncate">{wh}</span>
+            <div className="flex items-center gap-2 mb-2 py-1 border-b border-gray-100">
+              <span className="text-xs font-semibold text-blue-600 w-[140px] truncate">{wh}</span>
               <div className="grid grid-cols-6 gap-1 flex-1">
                 {seriesList.map(series => {
                   const inv = whInv[wh]?.[series] ?? 0;
@@ -266,7 +742,7 @@ function DecisionTable({
                   return (
                     <div key={series} className="text-center">
                       <span
-                        className={`font-mono text-[10px] ${isOver ? 'text-red-400 font-bold' : 'text-muted-foreground'}`}
+                        className={`font-mono text-[10px] ${isOver ? 'text-red-500 font-bold' : 'text-gray-400'}`}
                       >
                         余{Math.round(remaining)}
                       </span>
@@ -282,12 +758,14 @@ function DecisionTable({
                 <div className="flex items-center gap-1.5">
                   <span
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS] }}
+                    style={{
+                      background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS],
+                    }}
                   />
-                  <span className="text-xs text-muted-foreground">{group}</span>
+                  <span className="text-xs text-gray-500">{group}</span>
                   {stage === 2 && (
                     <select
-                      className="ml-auto text-[10px] bg-input border border-border rounded px-1 py-0.5 text-foreground"
+                      className="ml-auto text-[10px] bg-gray-50 border border-gray-200 rounded px-1 py-0.5 text-gray-700"
                       value={transportModes[wh]?.[group] ?? 'box'}
                       onChange={e => onModeChange(wh, group, e.target.value as 'box' | 'pallet')}
                     >
@@ -298,7 +776,8 @@ function DecisionTable({
                 </div>
                 <div className="grid grid-cols-6 gap-1">
                   {seriesList.map(series => {
-                    const isDisabled = group === '商超组' && series === '节日礼盒系列(直营店特供)';
+                    const isDisabled =
+                      group === '商超组' && series === '节日礼盒系列(直营店特供)';
                     const val = decisions[wh]?.[group]?.[series] ?? 0;
                     const inv = whInv[wh]?.[series] ?? 0;
                     const safety = whSafety[wh]?.[series] ?? 0;
@@ -314,12 +793,14 @@ function DecisionTable({
                         disabled={isDisabled}
                         value={isDisabled ? '' : val || ''}
                         placeholder={isDisabled ? '—' : '0'}
-                        onChange={e => onChange(wh, group, series, Math.max(0, parseInt(e.target.value) || 0))}
+                        onChange={e =>
+                          onChange(wh, group, series, Math.max(0, parseInt(e.target.value) || 0))
+                        }
                         className={`game-input text-center ${
                           isDisabled
                             ? 'opacity-20 cursor-not-allowed'
                             : isOver
-                            ? 'border-red-500 text-red-400 bg-red-500/5'
+                            ? 'border-red-400 text-red-500 bg-red-50'
                             : ''
                         }`}
                       />
@@ -335,112 +816,6 @@ function DecisionTable({
   );
 }
 
-// ─── 子组件：第二轮约束面板 ────────────────────────────────────
-function Stage2ConstraintsPanel() {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="game-card border-amber-400/20">
-      <button
-        className="flex items-center justify-between w-full"
-        onClick={() => setExpanded(v => !v)}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-amber-400">⚡</span>
-          <h2 className="text-sm font-semibold text-amber-400">第二轮新增约束</h2>
-        </div>
-        <span className="text-muted-foreground text-xs">{expanded ? '▲ 收起' : '▼ 展开'}</span>
-      </button>
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-4 space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* 直营店约束 */}
-                <div className="rounded border border-border p-3">
-                  <div className="text-xs font-semibold text-foreground mb-2">直营店约束</div>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-muted-foreground">
-                        <th className="text-left pb-1">门店</th>
-                        <th className="text-right pb-1">仓储容量</th>
-                        <th className="text-right pb-1">月度预算</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {DATA.direct_stores.map(store => {
-                        const c = DATA.direct_store_constraints[store];
-                        return (
-                          <tr key={store} className="border-t border-border/30">
-                            <td className="py-1 text-muted-foreground truncate max-w-[100px]">{store}</td>
-                            <td className="py-1 text-right font-mono text-foreground">{c?.storage_capacity ?? '∞'}</td>
-                            <td className="py-1 text-right font-mono text-foreground">¥{c?.monthly_budget?.toLocaleString() ?? '∞'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div className="mt-2 text-[10px] text-muted-foreground">
-                    C3(HARD)：月末库存≤仓储容量 | C4(SOFT)：运输成本≤月度预算
-                  </div>
-                </div>
-                {/* 商超约束 */}
-                <div className="rounded border border-border p-3">
-                  <div className="text-xs font-semibold text-foreground mb-2">商超进货上限 (C5 HARD)</div>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-muted-foreground">
-                        <th className="text-left pb-1">门店</th>
-                        <th className="text-right pb-1">月进货上限</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {DATA.supermarkets.map(store => {
-                        const c = DATA.supermarket_constraints[store];
-                        return (
-                          <tr key={store} className="border-t border-border/30">
-                            <td className="py-1 text-muted-foreground truncate max-w-[120px]">{store}</td>
-                            <td className="py-1 text-right font-mono text-foreground">{c?.monthly_order_limit ?? '∞'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              {/* 运输方式说明 */}
-              <div className="rounded border border-border p-3">
-                <div className="text-xs font-semibold text-foreground mb-2">运输方式（第二轮可选）</div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="flex items-start gap-2">
-                    <span className="text-base">📦</span>
-                    <div>
-                      <div className="font-medium text-foreground">箱式运输</div>
-                      <div className="text-muted-foreground">无最低量限制，成本系数 ×1.0</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-base">🔲</span>
-                    <div>
-                      <div className="font-medium text-amber-400">托盘运输</div>
-                      <div className="text-muted-foreground">最低 50 件/路线，成本系数 ×0.85</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // ─── 子组件：成本结果面板 ──────────────────────────────────────
 function ResultPanel({
   result,
@@ -451,70 +826,93 @@ function ResultPanel({
   stage: 1 | 2;
   onNextStage?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'series' | 'stores' | 'constraints' | 'details'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'series' | 'stores' | 'constraints' | 'details'
+  >('overview');
   const cs = result.cost_summary;
 
   const costItems = [
-    { label: '运输成本 C_trans', value: cs.c_trans, color: '#38bdf8', desc: '仓库→门店运输费用' },
+    { label: '运输成本 C_trans', value: cs.c_trans, color: '#2563eb', desc: '仓库→门店运输费用' },
     { label: '缺货成本 C_short', value: cs.c_short, color: '#ef4444', desc: '未满足需求的惩罚' },
-    { label: '持货成本 C_hold', value: cs.c_hold, color: '#a78bfa', desc: '门店+仓库库存持有' },
-    { label: '软约束惩罚 C_pen', value: cs.c_pen, color: '#f59e0b', desc: stage === 1 ? 'C2安全库存违反惩罚' : 'C2+C4约束违反惩罚' },
+    { label: '持货成本 C_hold', value: cs.c_hold, color: '#7c3aed', desc: '门店+仓库库存持有' },
+    {
+      label: '软约束惩罚 C_pen',
+      value: cs.c_pen,
+      color: '#d97706',
+      desc: stage === 1 ? 'C2安全库存违反惩罚' : 'C2+C4约束违反惩罚',
+    },
   ];
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="game-card"
+      className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
     >
       {/* 标题行 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className="text-base">📊</span>
-          <h2 className="text-sm font-semibold text-foreground">计算结果</h2>
+          <h2 className="text-sm font-semibold text-gray-800">计算结果</h2>
         </div>
-        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-          result.valid
-            ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/30'
-            : 'bg-red-400/10 text-red-400 border-red-400/30 animate-pulse-border'
-        }`}>
+        <div
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+            result.valid
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-red-50 text-red-700 border-red-200'
+          }`}
+        >
           {result.valid ? '✓ 所有硬约束满足' : `✗ ${result.errors.length} 项约束违反`}
         </div>
       </div>
 
       {/* 总成本 */}
-      <div className="text-center py-4 mb-4 rounded-lg bg-primary/5 border border-primary/20">
-        <div className="text-xs text-muted-foreground mb-1">总成本 C_total</div>
-        <div className="font-mono text-3xl font-bold text-primary animate-count">
-          ¥{cs.c_total.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      <div className="text-center py-4 mb-4 rounded-xl bg-blue-50 border border-blue-100">
+        <div className="text-xs text-gray-500 mb-1">总成本 C_total</div>
+        <div className="font-mono text-3xl font-bold text-blue-600 animate-count">
+          ¥
+          {cs.c_total.toLocaleString('zh-CN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </div>
       </div>
 
       {/* 成本分解 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         {costItems.map(item => (
-          <div key={item.label} className="rounded-lg p-3 border border-border bg-card/50">
-            <div className="text-[10px] text-muted-foreground mb-1">{item.label}</div>
+          <div key={item.label} className="rounded-lg p-3 border border-gray-100 bg-gray-50">
+            <div className="text-[10px] text-gray-400 mb-1">{item.label}</div>
             <div className="font-mono text-sm font-bold" style={{ color: item.color }}>
-              ¥{item.value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ¥
+              {item.value.toLocaleString('zh-CN', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">{item.desc}</div>
+            <div className="text-[10px] text-gray-400 mt-0.5">{item.desc}</div>
           </div>
         ))}
       </div>
 
       {/* 标签页 */}
-      <div className="flex gap-1 mb-3 border-b border-border">
+      <div className="flex gap-1 mb-3 border-b border-gray-200">
         {(['overview', 'series', 'stores', 'constraints', 'details'] as const).map(tab => {
-          const labels = { overview: '门店组满足率', series: '系列分析', stores: '仓库状态', constraints: '约束状态', details: '缺货明细' };
+          const labels = {
+            overview: '门店组满足率',
+            series: '系列分析',
+            stores: '仓库状态',
+            constraints: '约束状态',
+            details: '缺货明细',
+          };
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
                 activeTab === tab
-                  ? 'text-primary border-primary'
-                  : 'text-muted-foreground border-transparent hover:text-foreground'
+                  ? 'text-blue-600 border-blue-600'
+                  : 'text-gray-400 border-transparent hover:text-gray-700'
               }`}
             >
               {labels[tab]}
@@ -531,23 +929,34 @@ function ResultPanel({
               const gf = result.group_fulfillment[group];
               const rate = gf?.rate ?? 0;
               return (
-                <div key={group} className="rounded-lg border border-border p-3">
+                <div key={group} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS] }} />
-                    <span className="text-xs font-medium text-foreground">{group}</span>
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS],
+                      }}
+                    />
+                    <span className="text-xs font-medium text-gray-700">{group}</span>
                   </div>
-                  <div className="font-mono text-2xl font-bold mb-1" style={{
-                    color: rate >= 95 ? '#22c55e' : rate >= 80 ? '#f59e0b' : '#ef4444'
-                  }}>
+                  <div
+                    className="font-mono text-2xl font-bold mb-1"
+                    style={{
+                      color: rate >= 95 ? '#16a34a' : rate >= 80 ? '#d97706' : '#dc2626',
+                    }}
+                  >
                     {rate}%
                   </div>
-                  <div className="progress-bar mb-1">
-                    <div className="progress-fill" style={{
-                      width: `${rate}%`,
-                      background: rate >= 95 ? '#22c55e' : rate >= 80 ? '#f59e0b' : '#ef4444',
-                    }} />
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-1">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${rate}%`,
+                        background: rate >= 95 ? '#22c55e' : rate >= 80 ? '#f59e0b' : '#ef4444',
+                      }}
+                    />
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-[10px] text-gray-400">
                     满足 {gf?.fulfilled?.toLocaleString()} / {gf?.demand?.toLocaleString()} 件
                   </div>
                 </div>
@@ -555,23 +964,42 @@ function ResultPanel({
             })}
             {/* 各门店满足率 */}
             <div className="col-span-2">
-              <div className="text-xs text-muted-foreground mb-2">各门店满足率</div>
+              <div className="text-xs text-gray-400 mb-2">各门店满足率</div>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                 {DATA.stores.map(store => {
                   const sf = result.store_fulfillment[store];
                   const rate = sf?.fulfillment_rate ?? 0;
                   const isDirect = DATA.direct_stores.includes(store);
                   return (
-                    <div key={store} className={`rounded p-2 border text-center ${
-                      rate >= 95 ? 'border-emerald-400/30 bg-emerald-400/5' :
-                      rate >= 80 ? 'border-amber-400/30 bg-amber-400/5' :
-                      'border-red-400/30 bg-red-400/5'
-                    }`}>
-                      <div className="text-[10px] text-muted-foreground truncate">{store.replace('直营店', '').replace('超市', '').replace('(', '').replace(')', '')}</div>
-                      <div className={`font-mono text-sm font-bold ${
-                        rate >= 95 ? 'text-emerald-400' : rate >= 80 ? 'text-amber-400' : 'text-red-400'
-                      }`}>{rate}%</div>
-                      <div className="text-[9px] text-muted-foreground">{isDirect ? '直营' : '商超'}</div>
+                    <div
+                      key={store}
+                      className={`rounded p-2 border text-center ${
+                        rate >= 95
+                          ? 'border-emerald-200 bg-emerald-50'
+                          : rate >= 80
+                          ? 'border-amber-200 bg-amber-50'
+                          : 'border-red-200 bg-red-50'
+                      }`}
+                    >
+                      <div className="text-[10px] text-gray-500 truncate">
+                        {store
+                          .replace('直营店', '')
+                          .replace('超市', '')
+                          .replace('(', '')
+                          .replace(')', '')}
+                      </div>
+                      <div
+                        className={`font-mono text-sm font-bold ${
+                          rate >= 95
+                            ? 'text-emerald-600'
+                            : rate >= 80
+                            ? 'text-amber-600'
+                            : 'text-red-600'
+                        }`}
+                      >
+                        {rate}%
+                      </div>
+                      <div className="text-[9px] text-gray-400">{isDirect ? '直营' : '商超'}</div>
                     </div>
                   );
                 })}
@@ -583,24 +1011,33 @@ function ResultPanel({
         {activeTab === 'series' && (
           <div className="space-y-2">
             {result.series_summary.map(s => {
-              const rate = s.total_demand > 0 ? Math.round(((s.total_demand - s.total_shortage) / s.total_demand) * 1000) / 10 : 100;
+              const rate =
+                s.total_demand > 0
+                  ? Math.round(((s.total_demand - s.total_shortage) / s.total_demand) * 1000) / 10
+                  : 100;
               return (
-                <div key={s.series} className="flex items-center gap-3 rounded p-2 border border-border/50">
+                <div
+                  key={s.series}
+                  className="flex items-center gap-3 rounded-lg p-2 border border-gray-100"
+                >
                   <span className="text-lg w-7 text-center">{SERIES_ICONS[s.series]}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium" style={{ color: SERIES_COLORS[s.series] }}>
+                      <span
+                        className="text-xs font-medium"
+                        style={{ color: SERIES_COLORS[s.series] }}
+                      >
                         {s.series.replace('系列(直营店特供)', '★').replace('系列', '')}
                       </span>
-                      <span className="font-mono text-xs text-foreground">{rate}% 满足</span>
+                      <span className="font-mono text-xs text-gray-700">{rate}% 满足</span>
                     </div>
-                    <div className="progress-bar">
-                      <div className="progress-fill" style={{
-                        width: `${rate}%`,
-                        background: SERIES_COLORS[s.series],
-                      }} />
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${rate}%`, background: SERIES_COLORS[s.series] }}
+                      />
                     </div>
-                    <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground">
+                    <div className="flex gap-3 mt-1 text-[10px] text-gray-400">
                       <span>缺货 {s.total_shortage} 件</span>
                       <span>缺货成本 ¥{s.shortage_cost.toFixed(0)}</span>
                       <span>持货成本 ¥{s.hold_cost.toFixed(0)}</span>
@@ -619,35 +1056,46 @@ function ResultPanel({
               const c2 = result.constraint_status['C2'];
               const c2ViolWh = c2?.details?.filter(d => d.warehouse === wh) ?? [];
               return (
-                <div key={wh} className="rounded border border-border p-3">
+                <div key={wh} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-foreground">{wh}</span>
-                    <span className={`font-mono text-xs ${c2ViolWh.length > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                      {c2ViolWh.length > 0 ? `⚠ ${c2ViolWh.length} SKU低于安全库存` : '✓ 安全库存满足'}
+                    <span className="text-xs font-semibold text-gray-700">{wh}</span>
+                    <span
+                      className={`font-mono text-xs ${c2ViolWh.length > 0 ? 'text-amber-600' : 'text-emerald-600'}`}
+                    >
+                      {c2ViolWh.length > 0
+                        ? `⚠ ${c2ViolWh.length} SKU低于安全库存`
+                        : '✓ 安全库存满足'}
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <div className="text-muted-foreground">月初库存</div>
-                      <div className="font-mono font-semibold text-foreground">{usage?.total_available?.toLocaleString()}</div>
+                      <div className="text-gray-400">月初库存</div>
+                      <div className="font-mono font-semibold text-gray-700">
+                        {usage?.total_available?.toLocaleString()}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">已发货</div>
-                      <div className="font-mono font-semibold text-primary">{usage?.total_sent?.toLocaleString()}</div>
+                      <div className="text-gray-400">已发货</div>
+                      <div className="font-mono font-semibold text-blue-600">
+                        {usage?.total_sent?.toLocaleString()}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">月末剩余</div>
-                      <div className="font-mono font-semibold text-foreground">{usage?.total_remaining?.toLocaleString()}</div>
+                      <div className="text-gray-400">月末剩余</div>
+                      <div className="font-mono font-semibold text-gray-700">
+                        {usage?.total_remaining?.toLocaleString()}
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-2 progress-bar">
-                    <div className="progress-fill" style={{
-                      width: `${usage?.utilization_rate ?? 0}%`,
-                      background: '#38bdf8',
-                    }} />
+                  <div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${usage?.utilization_rate ?? 0}%`, background: '#2563eb' }}
+                    />
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    库存利用率 {usage?.utilization_rate}% | 安全库存下限 {usage?.total_safety_stock?.toLocaleString()} 件
+                  <div className="text-[10px] text-gray-400 mt-1">
+                    库存利用率 {usage?.utilization_rate}% | 安全库存下限{' '}
+                    {usage?.total_safety_stock?.toLocaleString()} 件
                   </div>
                 </div>
               );
@@ -660,8 +1108,10 @@ function ResultPanel({
             {Object.entries(result.constraint_status).map(([key, status]) => (
               <div
                 key={key}
-                className={`rounded border p-3 ${
-                  status.satisfied ? 'constraint-ok' : 'constraint-err'
+                className={`rounded-lg border p-3 ${
+                  status.satisfied
+                    ? 'constraint-ok'
+                    : 'constraint-err'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -671,26 +1121,34 @@ function ResultPanel({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] opacity-70">{status.mode}</span>
-                    <span className="text-xs font-semibold">{status.satisfied ? '✓ 满足' : '✗ 违反'}</span>
+                    <span className="text-xs font-semibold">
+                      {status.satisfied ? '✓ 满足' : '✗ 违反'}
+                    </span>
                   </div>
                 </div>
                 {status.penalty !== undefined && status.penalty > 0 && (
-                  <div className="text-[10px] mt-1 text-amber-400">惩罚成本：¥{status.penalty.toFixed(2)}</div>
+                  <div className="text-[10px] mt-1 text-amber-600">
+                    惩罚成本：¥{status.penalty.toFixed(2)}
+                  </div>
                 )}
                 {!status.satisfied && status.details.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {status.details.slice(0, 3).map((d, i) => (
-                      <div key={i} className="text-[10px] text-red-300 bg-red-400/5 rounded px-2 py-1">
+                      <div key={i} className="text-[10px] bg-red-50 rounded px-2 py-1 text-red-700">
                         {d.warehouse && `${d.warehouse} `}
                         {d.store && `${d.store} `}
                         {d.sku && `${d.sku} `}
                         {d.excess !== undefined && `超出 ${d.excess} 件`}
                         {d.violation !== undefined && `违反 ${d.violation} 件`}
-                        {d.ordered !== undefined && d.limit !== undefined && `进货 ${d.ordered} > 上限 ${d.limit}`}
+                        {d.ordered !== undefined &&
+                          d.limit !== undefined &&
+                          `进货 ${d.ordered} > 上限 ${d.limit}`}
                       </div>
                     ))}
                     {status.details.length > 3 && (
-                      <div className="text-[10px] text-muted-foreground">...还有 {status.details.length - 3} 条</div>
+                      <div className="text-[10px] text-gray-400">
+                        ...还有 {status.details.length - 3} 条
+                      </div>
                     )}
                   </div>
                 )}
@@ -702,12 +1160,12 @@ function ResultPanel({
         {activeTab === 'details' && (
           <div>
             {result.stockout_details.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">🎉 无缺货记录</div>
+              <div className="text-center py-8 text-gray-400 text-sm">🎉 无缺货记录</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-muted-foreground border-b border-border">
+                    <tr className="text-gray-400 border-b border-gray-200">
                       <th className="text-left py-1.5 pr-2">门店</th>
                       <th className="text-left py-1.5 pr-2">系列</th>
                       <th className="text-right py-1.5 pr-2">需求</th>
@@ -717,20 +1175,25 @@ function ResultPanel({
                   </thead>
                   <tbody>
                     {result.stockout_details.slice(0, 20).map((d, i) => (
-                      <tr key={i} className="border-b border-border/30">
-                        <td className="py-1 pr-2 text-muted-foreground truncate max-w-[80px]">{d.store}</td>
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-1 pr-2 text-gray-500 truncate max-w-[80px]">{d.store}</td>
                         <td className="py-1 pr-2" style={{ color: SERIES_COLORS[d.series] }}>
-                          {SERIES_ICONS[d.series]}{d.series.replace('系列(直营店特供)', '').replace('系列', '')}
+                          {SERIES_ICONS[d.series]}
+                          {d.series.replace('系列(直营店特供)', '').replace('系列', '')}
                         </td>
-                        <td className="py-1 pr-2 text-right font-mono text-foreground">{d.demand}</td>
-                        <td className="py-1 pr-2 text-right font-mono text-red-400">{d.shortfall}</td>
-                        <td className="py-1 text-right font-mono text-red-400">¥{d.stockout_cost.toFixed(2)}</td>
+                        <td className="py-1 pr-2 text-right font-mono text-gray-700">{d.demand}</td>
+                        <td className="py-1 pr-2 text-right font-mono text-red-500">
+                          {d.shortfall}
+                        </td>
+                        <td className="py-1 text-right font-mono text-red-500">
+                          ¥{d.stockout_cost.toFixed(2)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {result.stockout_details.length > 20 && (
-                  <div className="text-center text-xs text-muted-foreground mt-2">
+                  <div className="text-center text-xs text-gray-400 mt-2">
                     共 {result.stockout_details.length} 条，显示前 20 条
                   </div>
                 )}
@@ -745,18 +1208,18 @@ function ResultPanel({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-4 p-3 rounded-lg bg-emerald-400/5 border border-emerald-400/20"
+          className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200"
         >
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold text-emerald-400">✓ 第一轮决策完成！</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">
+              <div className="text-sm font-semibold text-emerald-700">✓ 第一轮决策完成！</div>
+              <div className="text-xs text-gray-500 mt-0.5">
                 点击进入第二轮，体验更多约束下的优化挑战
               </div>
             </div>
             <button
               onClick={onNextStage}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded text-xs font-semibold hover:opacity-90 transition-opacity"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
             >
               进入第二轮 →
             </button>
@@ -795,24 +1258,27 @@ export default function Home() {
   const emptyModes = useCallback((): TransportModeDecisions => {
     const m: TransportModeDecisions = {};
     for (const wh of DATA.warehouses) {
-      m[wh] = { '直营组': 'box', '商超组': 'box' };
+      m[wh] = { 直营组: 'box', 商超组: 'box' };
     }
     return m;
   }, []);
 
-  const handleChange = useCallback((wh: string, group: string, series: string, val: number) => {
-    setDecisions(prev => ({
-      ...prev,
-      [wh]: {
-        ...(prev[wh] ?? {}),
-        [group]: {
-          ...(prev[wh]?.[group] ?? {}),
-          [series]: val,
+  const handleChange = useCallback(
+    (wh: string, group: string, series: string, val: number) => {
+      setDecisions(prev => ({
+        ...prev,
+        [wh]: {
+          ...(prev[wh] ?? {}),
+          [group]: {
+            ...(prev[wh]?.[group] ?? {}),
+            [series]: val,
+          },
         },
-      },
-    }));
-    setResult(null);
-  }, []);
+      }));
+      setResult(null);
+    },
+    []
+  );
 
   const handleModeChange = useCallback((wh: string, group: string, mode: 'box' | 'pallet') => {
     setTransportModes(prev => ({
@@ -846,9 +1312,12 @@ export default function Home() {
         const res = calculate(stage, skuDecisions, storeModes, DATA);
         setResult(res);
         if (res.valid) {
-          toast.success(`计算完成，总成本 ¥${res.cost_summary.c_total.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`, {
-            description: res.warnings.length > 0 ? `${res.warnings.length} 条软约束警告` : '所有约束满足',
-          });
+          toast.success(
+            `计算完成，总成本 ¥${res.cost_summary.c_total.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+            {
+              description: res.warnings.length > 0 ? `${res.warnings.length} 条软约束警告` : '所有约束满足',
+            }
+          );
         } else {
           toast.error(`发现 ${res.errors.length} 条约束违反`, {
             description: res.errors[0],
@@ -865,27 +1334,37 @@ export default function Home() {
   const handleNextStage = useCallback(() => {
     setStage(2);
     setResult(null);
-    toast.info('进入第二轮', { description: '新增直营店容量/预算约束、商超进货上限、运输方式选择' });
+    toast.info('进入第二轮', {
+      description: '新增直营店容量/预算约束、商超进货上限、运输方式选择',
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const roundLabel = stage === 1 ? '第一轮：基础库存决策' : '第二轮：多约束优化';
 
   return (
-    <div className="min-h-screen bg-background">
-      <GameHUD stage={stage} round={roundLabel} />
+    <div className="min-h-screen bg-gray-50">
+      {/* 顶部导航 */}
+      <TopNav stage={stage} round={roundLabel} />
 
-      {/* 游戏说明横幅 */}
-      <div className="bg-card/30 border-b border-border px-6 py-3">
-        <p className="text-xs text-muted-foreground max-w-4xl">
-          {stage === 1
-            ? '🎯 目标：为上海3个仓库向10家门店分配饼干库存，最小化运输成本+缺货成本+持货成本。决策维度已聚合为「仓库×门店组×系列」，系统自动按需求比例拆分到SKU级别计算。'
-            : '🎯 第二轮新增约束：直营店仓储容量(HARD)、月度预算(SOFT)、商超进货上限(HARD)、安全库存(HARD)、托盘运输最低量。体验多约束下的权衡决策。'}
-        </p>
-      </div>
+      {/* Hero 横幅 */}
+      <HeroBanner stage={stage} />
 
-      <div className="container py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+      {/* 步骤标签页 */}
+      <StepTabs stage={stage} />
+
+      {/* 统计卡片 */}
+      <StatsRow />
+
+      {/* 两个柱状图 */}
+      <ChartsRow />
+
+      {/* 约束说明区 */}
+      <ConstraintInfo stage={stage} />
+
+      {/* 决策区 */}
+      <div id="decision" className="container py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
           {/* 左侧信息面板 */}
           <div className="space-y-4">
             <WarehousePanel stage={stage} />
@@ -897,23 +1376,24 @@ export default function Home() {
           <div className="space-y-4">
             {/* 操作按钮栏 */}
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={handleSuggest}
-                className="px-4 py-2 bg-primary/10 text-primary border border-primary/30 rounded text-xs font-semibold hover:bg-primary/20 transition-colors"
-              >
-                💡 参考建议量
-              </button>
+              <h3 className="text-base font-bold text-gray-800 mr-2">运输决策输入</h3>
+              <div className="flex-1" />
               <button
                 onClick={handleClear}
-                className="px-4 py-2 bg-secondary text-secondary-foreground border border-border rounded text-xs font-semibold hover:bg-secondary/80 transition-colors"
+                className="px-4 py-2 bg-white text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
               >
-                🗑 全部清零
+                全部清零
               </button>
-              <div className="flex-1" />
+              <button
+                onClick={handleSuggest}
+                className="px-4 py-2 bg-white text-blue-600 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
+              >
+                参考建议量
+              </button>
               <button
                 onClick={handleCalculate}
                 disabled={isCalculating}
-                className="px-6 py-2 bg-primary text-primary-foreground rounded text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {isCalculating ? (
                   <>
