@@ -55,6 +55,13 @@ function GameHUD({ stage, round }: { stage: 1 | 2; round: string }) {
         <span className="text-xs text-muted-foreground hidden sm:block">
           3仓库 × 2门店组 × 6系列
         </span>
+        <a
+          href="/files"
+          className="ml-2 px-3 py-1 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors flex items-center gap-1"
+        >
+          <span>📁</span>
+          <span className="hidden sm:inline">文件库</span>
+        </a>
       </div>
     </div>
   );
