@@ -42,14 +42,21 @@ import {
 
 const DATA = RAW_GAME_DATA as unknown as GameData;
 
+// ─── 筛选后的4个系列（基于两轮LP优化差异分析）──────────────
+// 精致甜点系列和经典夹心系列：两轮结果差异最大（受约束影响）
+// 营养谷物系列和无糖系列：高需求量补充
+const VISIBLE_SERIES = ['精致甜点系列', '经典夹心系列', '营养谷物系列', '无糖系列'];
+
+// ─── 界面可见仓库（仅显示2个，第三个保留在数据中）────────────
+const VISIBLE_WAREHOUSES = ['上海奉贤仓储中心', '嘉定配送中心'];
+
 // ─── 仓库库存柱状图数据 ──────────────────────────────────────
 function useWarehouseChartData() {
   return useMemo(() => {
-    const seriesList = getSeriesList(DATA);
     const whInv = aggregateWarehouseInventory(DATA);
-    return DATA.warehouses.map(wh => {
+    return VISIBLE_WAREHOUSES.map(wh => {
       const row: Record<string, string | number> = { name: wh };
-      for (const series of seriesList) {
+      for (const series of VISIBLE_SERIES) {
         row[series] = whInv[wh]?.[series] ?? 0;
       }
       return row;
@@ -204,13 +211,13 @@ function StepTabs({ stage }: { stage: 1 | 2 }) {
 // ─── 子组件：统计卡片行 ──────────────────────────────────────
 function StatsRow() {
   const totalInventory = useMemo(() => {
-    return DATA.warehouses.reduce((sum, wh) => {
+    return VISIBLE_WAREHOUSES.reduce((sum, wh) => {
       return sum + Object.values(DATA.warehouse_inventory[wh] ?? {}).reduce((s, v) => s + v, 0);
     }, 0);
   }, []);
 
   const stats = [
-    { label: '仓库数量', value: DATA.warehouses.length, unit: '个', color: 'text-blue-600' },
+    { label: '仓库数量', value: VISIBLE_WAREHOUSES.length, unit: '个', color: 'text-blue-600' },
     { label: '门店数量', value: DATA.stores.length, unit: '家', color: 'text-blue-600' },
     { label: 'SKU种类', value: DATA.skus.length, unit: '种', color: 'text-blue-600' },
     {
@@ -240,13 +247,12 @@ function StatsRow() {
 function ChartsRow() {
   const warehouseData = useWarehouseChartData();
   const storeData = useStoreChartData();
-  const seriesList = useMemo(() => getSeriesList(DATA), []);
-
-  // 截短仓库名
+  // 使用筛选后的4个系列
+  const seriesList = VISIBLE_SERIES;
+  // 截短仓库名（只显示可见仓库）
   const whShortNames: Record<string, string> = {
     上海奉贤仓储中心: '上海奉贤仓储中心',
     嘉定配送中心: '嘉定配送中心',
-    松江物流园: '松江物流园',
   };
 
   const warehouseDataShort = warehouseData.map(row => ({
@@ -259,7 +265,7 @@ function ChartsRow() {
       {/* 左图：仓库库存水平 */}
       <div className="bg-white p-6 border-r border-gray-200">
         <h3 className="text-base font-semibold text-gray-900 mb-1">仓库可用库存水平</h3>
-        <p className="text-xs text-gray-500 mb-4">3个仓库各系列库存分布（件）</p>
+        <p className="text-xs text-gray-500 mb-4">2个仓库各系列库存分布（件）</p>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={warehouseDataShort} margin={{ top: 5, right: 10, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -406,27 +412,7 @@ function ConstraintInfo({ stage }: { stage: 1 | 2 }) {
             </ul>
           </div>
 
-          {stage === 2 && (
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <h5 className="text-xs font-semibold text-amber-800 mb-2">运输方式（第二轮可选）</h5>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-start gap-1.5">
-                  <span>📦</span>
-                  <div>
-                    <div className="font-medium text-amber-800">箱式运输</div>
-                    <div className="text-amber-700">无最低量，成本 ×1.0</div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-1.5">
-                  <span>🔲</span>
-                  <div>
-                    <div className="font-medium text-amber-800">托盘运输</div>
-                    <div className="text-amber-700">最低 50 件，成本 ×0.85</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
       </div>
     </div>
@@ -529,10 +515,8 @@ function Stage2ConstraintsPanel() {
 
 // ─── 子组件：仓库库存侧边卡片 ──────────────────────────────────
 function WarehousePanel({ stage }: { stage: 1 | 2 }) {
-  const seriesList = useMemo(() => getSeriesList(DATA), []);
   const whInv = useMemo(() => aggregateWarehouseInventory(DATA), []);
   const whSafety = useMemo(() => aggregateSafetyStock(DATA), []);
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
@@ -545,9 +529,9 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
         )}
       </div>
       <div className="space-y-3">
-        {DATA.warehouses.map(wh => {
-          const totalInv = seriesList.reduce((s, sr) => s + (whInv[wh]?.[sr] ?? 0), 0);
-          const totalSafety = seriesList.reduce((s, sr) => s + (whSafety[wh]?.[sr] ?? 0), 0);
+        {VISIBLE_WAREHOUSES.map(wh => {
+          const totalInv = VISIBLE_SERIES.reduce((s, sr) => s + (whInv[wh]?.[sr] ?? 0), 0);
+          const totalSafety = VISIBLE_SERIES.reduce((s, sr) => s + (whSafety[wh]?.[sr] ?? 0), 0);
           const usable = stage === 2 ? Math.max(0, totalInv - totalSafety) : totalInv;
           const pct = totalInv > 0 ? (usable / totalInv) * 100 : 0;
           return (
@@ -583,7 +567,7 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
 
 // ─── 子组件：门店组需求侧边卡片 ──────────────────────────────
 function DemandPanel() {
-  const seriesList = useMemo(() => getSeriesList(DATA), []);
+  const seriesList = VISIBLE_SERIES;
   const groupDemand = useMemo(() => aggregateGroupDemand(DATA), []);
   const groupInv = useMemo(() => aggregateGroupCurrentInventory(DATA), []);
 
@@ -669,15 +653,14 @@ function DecisionTable({
   onChange: (wh: string, group: string, series: string, val: number) => void;
   onModeChange: (wh: string, group: string, mode: 'box' | 'pallet') => void;
 }) {
-  const seriesList = useMemo(() => getSeriesList(DATA), []);
+  const seriesList = VISIBLE_SERIES;
   const whInv = useMemo(() => aggregateWarehouseInventory(DATA), []);
   const whSafety = useMemo(() => aggregateSafetyStock(DATA), []);
   const groups = ['直营组', '商超组'];
-
   // 计算各仓库已分配量（系列维度）
   const allocated = useMemo(() => {
     const result: Record<string, Record<string, number>> = {};
-    for (const wh of DATA.warehouses) {
+    for (const wh of VISIBLE_WAREHOUSES) {
       result[wh] = {};
       for (const series of seriesList) {
         result[wh][series] = groups.reduce(
@@ -704,9 +687,9 @@ function DecisionTable({
 
       <div className="min-w-[700px]">
         {/* 表头 */}
-        <div className="grid grid-cols-[140px_1fr] gap-2 mb-2">
+          <div className="grid grid-cols-[140px_1fr] gap-2 mb-2">
           <div />
-          <div className="grid grid-cols-6 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             {seriesList.map(series => (
               <div
                 key={series}
@@ -726,12 +709,12 @@ function DecisionTable({
         </div>
 
         {/* 仓库 × 门店组 行 */}
-        {DATA.warehouses.map(wh => (
+        {VISIBLE_WAREHOUSES.map(wh => (
           <div key={wh} className="mb-4">
             {/* 仓库标题行 */}
             <div className="flex items-center gap-2 mb-2 py-1 border-b border-gray-100">
               <span className="text-xs font-semibold text-blue-600 w-[140px] truncate">{wh}</span>
-              <div className="grid grid-cols-6 gap-1 flex-1">
+              <div className="grid grid-cols-4 gap-1 flex-1">
                 {seriesList.map(series => {
                   const inv = whInv[wh]?.[series] ?? 0;
                   const safety = whSafety[wh]?.[series] ?? 0;
@@ -763,18 +746,9 @@ function DecisionTable({
                     }}
                   />
                   <span className="text-xs text-gray-500">{group}</span>
-                  {stage === 2 && (
-                    <select
-                      className="ml-auto text-[10px] bg-gray-50 border border-gray-200 rounded px-1 py-0.5 text-gray-700"
-                      value={transportModes[wh]?.[group] ?? 'box'}
-                      onChange={e => onModeChange(wh, group, e.target.value as 'box' | 'pallet')}
-                    >
-                      <option value="box">📦箱</option>
-                      <option value="pallet">🔲托</option>
-                    </select>
-                  )}
+
                 </div>
-                <div className="grid grid-cols-6 gap-1">
+                <div className="grid grid-cols-4 gap-1">
                   {seriesList.map(series => {
                     const isDisabled =
                       group === '商超组' && series === '节日礼盒系列(直营店特供)';
@@ -1051,7 +1025,7 @@ function ResultPanel({
 
         {activeTab === 'stores' && (
           <div className="space-y-2">
-            {DATA.warehouses.map(wh => {
+            {VISIBLE_WAREHOUSES.map(wh => {
               const usage = result.inventory_usage[wh];
               const c2 = result.constraint_status['C2'];
               const c2ViolWh = c2?.details?.filter(d => d.warehouse === wh) ?? [];
@@ -1238,26 +1212,23 @@ export default function Home() {
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  const seriesList = useMemo(() => getSeriesList(DATA), []);
-
   // 初始化空决策
   const emptyDecisions = useCallback((): SeriesGroupDecisions => {
     const d: SeriesGroupDecisions = {};
-    for (const wh of DATA.warehouses) {
+    for (const wh of VISIBLE_WAREHOUSES) {
       d[wh] = {};
       for (const group of ['直营组', '商超组']) {
         d[wh][group] = {};
-        for (const series of seriesList) {
+        for (const series of VISIBLE_SERIES) {
           d[wh][group][series] = 0;
         }
       }
     }
     return d;
-  }, [seriesList]);
-
+  }, []);
   const emptyModes = useCallback((): TransportModeDecisions => {
     const m: TransportModeDecisions = {};
-    for (const wh of DATA.warehouses) {
+    for (const wh of VISIBLE_WAREHOUSES) {
       m[wh] = { 直营组: 'box', 商超组: 'box' };
     }
     return m;
@@ -1335,7 +1306,7 @@ export default function Home() {
     setStage(2);
     setResult(null);
     toast.info('进入第二轮', {
-      description: '新增直营店容量/预算约束、商超进货上限、运输方式选择',
+      description: '新增直营店容量/预算约束、商超进货上限',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -1369,7 +1340,7 @@ export default function Home() {
           <div className="space-y-4">
             <WarehousePanel stage={stage} />
             <DemandPanel />
-            {stage === 2 && <Stage2ConstraintsPanel />}
+
           </div>
 
           {/* 右侧决策区 */}
@@ -1384,12 +1355,7 @@ export default function Home() {
               >
                 全部清零
               </button>
-              <button
-                onClick={handleSuggest}
-                className="px-4 py-2 bg-white text-blue-600 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
-              >
-                参考建议量
-              </button>
+
               <button
                 onClick={handleCalculate}
                 disabled={isCalculating}

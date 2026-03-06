@@ -88,17 +88,12 @@ export function calculate(
   let cTrans = 0;
   const transByWarehouse: Record<string, number> = Object.fromEntries(warehouses.map(w => [w, 0]));
   const transByStore: Record<string, number> = Object.fromEntries(stores.map(s => [s, 0]));
-  const boxMult = data.transport_modes.box.cost_multiplier;
-  const palletMult = data.transport_modes.pallet.cost_multiplier;
-  const palletMin = data.transport_modes.pallet.min_quantity;
-
+  // 运输成本统一直接读取 unit_transport_costs，不区分运输方式
   for (const wh of warehouses) {
     for (const store of stores) {
       const unitCost = data.transport_cost[wh]?.[store] ?? 0;
-      const mode = transportModes[wh]?.[store] ?? 'box';
-      const multiplier = mode === 'pallet' ? palletMult : boxMult;
       const routeQty = routeTotal[wh][store];
-      const routeCost = routeQty * unitCost * multiplier;
+      const routeCost = routeQty * unitCost;
       cTrans += routeCost;
       transByWarehouse[wh] += routeCost;
       transByStore[store] += routeCost;
@@ -278,29 +273,7 @@ export function calculate(
   }
   constraintStatus['C5'] = { name: '商超进货上限约束', mode: 'HARD（第二轮）', satisfied: c5Ok, details: c5Details };
 
-  // 托盘运输最低量约束（第二轮）
-  let palletOk = true;
-  const palletDetails: ConstraintStatus['details'] = [];
-  if (stage === 2) {
-    for (const wh of warehouses) {
-      for (const store of stores) {
-        const mode = transportModes[wh]?.[store] ?? 'box';
-        if (mode === 'pallet') {
-          const totalQty = routeTotal[wh][store];
-          if (totalQty > 1e-6 && totalQty < palletMin - 1e-6) {
-            palletOk = false;
-            palletDetails.push({ warehouse: wh, store, quantity: Math.round(totalQty), min_required: palletMin });
-            const msg = `[运输方式违反] ${wh}→${store}：托盘运输但发货量 ${Math.round(totalQty)} 件 < 最低 ${palletMin} 件`;
-            violations.push(msg);
-            errors.push(msg);
-          }
-        }
-      }
-    }
-  }
-  constraintStatus['pallet_min'] = { name: '托盘运输最低起运量约束', mode: 'HARD（第二轮）', satisfied: palletOk, details: palletDetails };
-
-  const isValid = c1Ok && (stage === 2 ? c2Ok : true) && (stage === 2 ? c3Ok : true) && (stage === 2 ? c5Ok : true) && (stage === 2 ? palletOk : true);
+  const isValid = c1Ok && (stage === 2 ? c2Ok : true) && (stage === 2 ? c3Ok : true) && (stage === 2 ? c5Ok : true);
 
   const cTotal = cTrans + cShort + cHold + cPen;
 
