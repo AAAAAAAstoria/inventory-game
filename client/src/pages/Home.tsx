@@ -536,7 +536,7 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
         )}
       </div>
       <div className="space-y-3">
-        {DATA.warehouses.map(wh => {
+        {VISIBLE_WAREHOUSES.map(wh => {
           const totalInv = VISIBLE_SERIES.reduce((s, sr) => s + (whInv[wh]?.[sr] ?? 0), 0);
           const totalSafety = VISIBLE_SERIES.reduce((s, sr) => s + (whSafety[wh]?.[sr] ?? 0), 0);
           const usable = stage === 2 ? Math.max(0, totalInv - totalSafety) : totalInv;
@@ -980,7 +980,7 @@ function ResultPanel({
 
         {activeTab === 'stores' && (
           <div className="space-y-2">
-            {DATA.warehouses.map(wh => {
+            {VISIBLE_WAREHOUSES.map(wh => {
               const usage = result.inventory_usage[wh];
               const c2 = result.constraint_status['C2'];
               const c2ViolWh = c2?.details?.filter(d => d.warehouse === wh) ?? [];
@@ -1324,11 +1324,11 @@ export default function Home() {
                     <tr className="border-b border-amber-100">
                       <td className="py-1 pr-3 font-medium" rowSpan={2}>运输成本（元/件）</td>
                       <td className="py-1 pr-3">南京东路直营店</td>
-                      <td className="py-1 text-right font-mono">奉贤4.2 / 嘉定4.68 / 松江5.28</td>
+                      <td className="py-1 text-right font-mono">奉贤4.2 / 嘉定4.68</td>
                     </tr>
                     <tr className="border-b border-amber-100">
                       <td className="py-1 pr-3">大象超市(长宁店)</td>
-                      <td className="py-1 text-right font-mono">奉贤5.1 / 嘉定3.48 / 松江5.1</td>
+                      <td className="py-1 text-right font-mono">奉贤5.1 / 嘉定3.48</td>
                     </tr>
                     <tr className="border-b border-amber-100">
                       <td className="py-1 pr-3 font-medium">月度预算（元）</td>
