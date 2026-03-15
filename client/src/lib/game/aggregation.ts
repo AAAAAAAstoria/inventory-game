@@ -147,55 +147,83 @@ export function expandDecisions(
 
   const seriesList = getSeriesList(data);
 
+  // 检测决策结构：支持「直营组/商超组」和「具体门店名」两种 key 格式
+  const firstWh = data.warehouses[0];
+  const firstDecisionKeys = firstWh ? Object.keys(seriesGroupDecisions[firstWh] ?? {}) : [];
+  const isStoreKeyMode = firstDecisionKeys.length > 0 &&
+    (data.stores.includes(firstDecisionKeys[0]) || data.direct_stores.includes(firstDecisionKeys[0]));
+
   for (const wh of data.warehouses) {
-    for (const group of ['直营组', '商超组']) {
-      const storesInGroup = getStoresInGroup(data, group);
-      for (const series of seriesList) {
-        const qty = seriesGroupDecisions[wh]?.[group]?.[series] ?? 0;
-        if (qty <= 0) continue;
+    if (isStoreKeyMode) {
+      // 新格式：决策 key 是具体门店名，直接将数量按 SKU 比例分配到该门店
+      for (const store of data.stores) {
+        for (const series of seriesList) {
+          const qty = seriesGroupDecisions[wh]?.[store]?.[series] ?? 0;
+          if (qty <= 0) continue;
 
-        const skusInSeries = getSkusInSeries(data, series);
-
-        // 计算门店需求总量（用于比例分配）
-        const storeDemandTotal: Record<string, number> = {};
-        let totalStoreDemand = 0;
-        for (const store of storesInGroup) {
-          const d = skusInSeries.reduce(
-            (sum, sku) => sum + (data.demand[store]?.[sku] ?? 0),
-            0
-          );
-          storeDemandTotal[store] = d;
-          totalStoreDemand += d;
-        }
-
-        // 计算SKU需求总量（用于比例分配）
-        const skuDemandTotal: Record<string, number> = {};
-        let totalSkuDemand = 0;
-        for (const sku of skusInSeries) {
-          const d = storesInGroup.reduce(
-            (sum, store) => sum + (data.demand[store]?.[sku] ?? 0),
-            0
-          );
-          skuDemandTotal[sku] = d;
-          totalSkuDemand += d;
-        }
-
-        for (const store of storesInGroup) {
-          // 门店分配比例
-          const storeRatio =
-            totalStoreDemand > 0
-              ? storeDemandTotal[store] / totalStoreDemand
-              : 1 / storesInGroup.length;
-          const storeQty = qty * storeRatio;
+          const skusInSeries = getSkusInSeries(data, series);
+          const skuDemandTotal: Record<string, number> = {};
+          let totalSkuDemand = 0;
+          for (const sku of skusInSeries) {
+            const d = data.demand[store]?.[sku] ?? 0;
+            skuDemandTotal[sku] = d;
+            totalSkuDemand += d;
+          }
 
           for (const sku of skusInSeries) {
-            // SKU分配比例
-            const skuRatio =
-              totalSkuDemand > 0
-                ? skuDemandTotal[sku] / totalSkuDemand
-                : 1 / skusInSeries.length;
-            const skuQty = Math.round(storeQty * skuRatio);
+            const skuRatio = totalSkuDemand > 0 ? skuDemandTotal[sku] / totalSkuDemand : 1 / skusInSeries.length;
+            const skuQty = Math.round(qty * skuRatio);
             skuDecisions[wh][store][sku] += skuQty;
+          }
+        }
+      }
+    } else {
+      // 原格式：决策 key 是「直营组/商超组」
+      for (const group of ['直营组', '商超组']) {
+        const storesInGroup = getStoresInGroup(data, group);
+        for (const series of seriesList) {
+          const qty = seriesGroupDecisions[wh]?.[group]?.[series] ?? 0;
+          if (qty <= 0) continue;
+
+          const skusInSeries = getSkusInSeries(data, series);
+
+          const storeDemandTotal: Record<string, number> = {};
+          let totalStoreDemand = 0;
+          for (const store of storesInGroup) {
+            const d = skusInSeries.reduce(
+              (sum, sku) => sum + (data.demand[store]?.[sku] ?? 0),
+              0
+            );
+            storeDemandTotal[store] = d;
+            totalStoreDemand += d;
+          }
+
+          const skuDemandTotal: Record<string, number> = {};
+          let totalSkuDemand = 0;
+          for (const sku of skusInSeries) {
+            const d = storesInGroup.reduce(
+              (sum, store) => sum + (data.demand[store]?.[sku] ?? 0),
+              0
+            );
+            skuDemandTotal[sku] = d;
+            totalSkuDemand += d;
+          }
+
+          for (const store of storesInGroup) {
+            const storeRatio =
+              totalStoreDemand > 0
+                ? storeDemandTotal[store] / totalStoreDemand
+                : 1 / storesInGroup.length;
+            const storeQty = qty * storeRatio;
+
+            for (const sku of skusInSeries) {
+              const skuRatio =
+                totalSkuDemand > 0
+                  ? skuDemandTotal[sku] / totalSkuDemand
+                  : 1 / skusInSeries.length;
+              const skuQty = Math.round(storeQty * skuRatio);
+              skuDecisions[wh][store][sku] += skuQty;
+            }
           }
         }
       }
@@ -241,12 +269,25 @@ export function expandTransportModes(
   data: GameData
 ): Record<string, Record<string, 'box' | 'pallet'>> {
   const result: Record<string, Record<string, 'box' | 'pallet'>> = {};
+  const firstWh = data.warehouses[0];
+  const firstModeKeys = firstWh ? Object.keys(groupModes[firstWh] ?? {}) : [];
+  const isStoreKeyMode = firstModeKeys.length > 0 &&
+    (data.stores.includes(firstModeKeys[0]) || data.direct_stores.includes(firstModeKeys[0]));
+
   for (const wh of data.warehouses) {
     result[wh] = {};
-    for (const group of ['直营组', '商超组']) {
-      const mode = groupModes[wh]?.[group] ?? 'box';
-      for (const store of getStoresInGroup(data, group)) {
-        result[wh][store] = mode;
+    if (isStoreKeyMode) {
+      // 新格式：门店名为 key
+      for (const store of data.stores) {
+        result[wh][store] = groupModes[wh]?.[store] ?? 'box';
+      }
+    } else {
+      // 原格式：直营组/商超组为 key
+      for (const group of ['直营组', '商超组']) {
+        const mode = groupModes[wh]?.[group] ?? 'box';
+        for (const store of getStoresInGroup(data, group)) {
+          result[wh][store] = mode;
+        }
       }
     }
   }

@@ -42,21 +42,25 @@ import {
 
 const DATA = RAW_GAME_DATA as unknown as GameData;
 
-// ─── 筛选后的4个系列（基于两轮LP优化差异分析）──────────────
-// 精致甜点系列和经典夹心系列：两轮结果差异最大（受约束影响）
-// 营养谷物系列和无糖系列：高需求量补充
-const VISIBLE_SERIES = ['精致甜点系列', '经典夹心系列', '营养谷物系列', '无糖系列'];
+// ─── 游戏决策使用的2个系列（精致甜点+经典夹心，受第二轮约束影响最大）
+const VISIBLE_SERIES = ['精致甜点系列', '经典夹心系列'];
 
-// ─── 界面可见仓库（仅显示2个，第三个保留在数据中）────────────
-const VISIBLE_WAREHOUSES = ['上海奉贤仓储中心', '嘉定配送中心'];
+// ─── 游戏决策使用的2个门店（1个直营+1个商超）
+const VISIBLE_STORES = ['南京东路直营店', '大象超市(长宁店)'];
 
-// ─── 仓库库存柱状图数据 ──────────────────────────────────────
+// ─── 界面可见仓库（显示全部3个）────────────
+const VISIBLE_WAREHOUSES = ['上海奉贤仓储中心', '嘉定配送中心', '松江物流园'];
+
+/// ─── 图表展示用的全部6个系列
+const ALL_SERIES_FOR_CHART = ['精致甜点系列', '经典夹心系列', '营养谷物系列', '无糖系列', '儿童系列', '节日礼盒系列(直营店特供)'];
+
+// ─── 仓库库存柱状图数据（使用全部3个仓库、6个系列完整数据）
 function useWarehouseChartData() {
   return useMemo(() => {
     const whInv = aggregateWarehouseInventory(DATA);
-    return VISIBLE_WAREHOUSES.map(wh => {
+    return DATA.warehouses.map(wh => {
       const row: Record<string, string | number> = { name: wh };
-      for (const series of VISIBLE_SERIES) {
+      for (const series of ALL_SERIES_FOR_CHART) {
         row[series] = whInv[wh]?.[series] ?? 0;
       }
       return row;
@@ -211,13 +215,13 @@ function StepTabs({ stage }: { stage: 1 | 2 }) {
 // ─── 子组件：统计卡片行 ──────────────────────────────────────
 function StatsRow() {
   const totalInventory = useMemo(() => {
-    return VISIBLE_WAREHOUSES.reduce((sum, wh) => {
+    return DATA.warehouses.reduce((sum, wh) => {
       return sum + Object.values(DATA.warehouse_inventory[wh] ?? {}).reduce((s, v) => s + v, 0);
     }, 0);
   }, []);
 
   const stats = [
-    { label: '仓库数量', value: VISIBLE_WAREHOUSES.length, unit: '个', color: 'text-blue-600' },
+    { label: '仓库数量', value: DATA.warehouses.length, unit: '个', color: 'text-blue-600' },
     { label: '门店数量', value: DATA.stores.length, unit: '家', color: 'text-blue-600' },
     { label: 'SKU种类', value: DATA.skus.length, unit: '种', color: 'text-blue-600' },
     {
@@ -243,29 +247,21 @@ function StatsRow() {
   );
 }
 
-// ─── 子组件：两个 Recharts 柱状图 ──────────────────────────────
+// ─── 子组件：两个 Recharts 柱状图 ────────────────────────
 function ChartsRow() {
   const warehouseData = useWarehouseChartData();
   const storeData = useStoreChartData();
-  // 使用筛选后的4个系列
-  const seriesList = VISIBLE_SERIES;
-  // 截短仓库名（只显示可见仓库）
-  const whShortNames: Record<string, string> = {
-    上海奉贤仓储中心: '上海奉贤仓储中心',
-    嘉定配送中心: '嘉定配送中心',
-  };
+  // 图表使用全部6个系列
+  const seriesList = ALL_SERIES_FOR_CHART;
 
-  const warehouseDataShort = warehouseData.map(row => ({
-    ...row,
-    name: whShortNames[row.name as string] ?? row.name,
-  }));
+  const warehouseDataShort = warehouseData;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-b border-gray-200">
       {/* 左图：仓库库存水平 */}
       <div className="bg-white p-6 border-r border-gray-200">
         <h3 className="text-base font-semibold text-gray-900 mb-1">仓库可用库存水平</h3>
-        <p className="text-xs text-gray-500 mb-4">2个仓库各系列库存分布（件）</p>
+        <p className="text-xs text-gray-500 mb-4">3个仓库各系列库存分布（件）</p>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={warehouseDataShort} margin={{ top: 5, right: 10, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -328,7 +324,18 @@ function ChartsRow() {
   );
 }
 
-// ─── 子组件：约束说明区 ──────────────────────────────────────
+// ─── 子组件：图例说明与游戏说明之间的过渡文字 ────────────────────
+function GameScopeNote() {
+  return (
+    <div className="bg-blue-50 border-b border-blue-100 px-6 py-3">
+      <p className="text-sm text-blue-800">
+        接下来，我们从3个区域仓库、10个门店和6个饼干系列中选取2个门店，2款产品和2个仓库，进行游戏模拟。
+      </p>
+    </div>
+  );
+}
+
+// ─── 子组件：约束说明区 ──────────────────────────────
 function ConstraintInfo({ stage }: { stage: 1 | 2 }) {
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-6">
@@ -529,7 +536,7 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
         )}
       </div>
       <div className="space-y-3">
-        {VISIBLE_WAREHOUSES.map(wh => {
+        {DATA.warehouses.map(wh => {
           const totalInv = VISIBLE_SERIES.reduce((s, sr) => s + (whInv[wh]?.[sr] ?? 0), 0);
           const totalSafety = VISIBLE_SERIES.reduce((s, sr) => s + (whSafety[wh]?.[sr] ?? 0), 0);
           const usable = stage === 2 ? Math.max(0, totalInv - totalSafety) : totalInv;
@@ -565,11 +572,9 @@ function WarehousePanel({ stage }: { stage: 1 | 2 }) {
   );
 }
 
-// ─── 子组件：门店组需求侧边卡片 ──────────────────────────────
+// ─── 子组件：门店需求侧边卡片（展示2个具体门店）
 function DemandPanel() {
   const seriesList = VISIBLE_SERIES;
-  const groupDemand = useMemo(() => aggregateGroupDemand(DATA), []);
-  const groupInv = useMemo(() => aggregateGroupCurrentInventory(DATA), []);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -578,58 +583,55 @@ function DemandPanel() {
         <h2 className="text-sm font-semibold text-gray-800">门店需求概览</h2>
       </div>
       <div className="space-y-4">
-        {['直营组', '商超组'].map(group => {
-          const totalDemand = seriesList.reduce((s, sr) => s + (groupDemand[group]?.[sr] ?? 0), 0);
-          const totalInv = seriesList.reduce((s, sr) => s + (groupInv[group]?.[sr] ?? 0), 0);
+        {VISIBLE_STORES.map(store => {
+          const isDirect = DATA.direct_stores.includes(store);
+          const totalDemand = seriesList.reduce((s, sr) => {
+            const skusInSeries = DATA.skus.filter(sku => DATA.sku_series[sku] === sr);
+            return s + skusInSeries.reduce((s2, sku) => s2 + (DATA.demand[store]?.[sku] ?? 0), 0);
+          }, 0);
+          const totalInv = seriesList.reduce((s, sr) => {
+            const skusInSeries = DATA.skus.filter(sku => DATA.sku_series[sku] === sr);
+            return s + skusInSeries.reduce((s2, sku) => s2 + (DATA.current_store_inventory[store]?.[sku] ?? 0), 0);
+          }, 0);
           const netNeed = Math.max(0, totalDemand - totalInv);
+          const storeColor = isDirect ? '#6366f1' : '#0ea5e9';
           return (
-            <div key={group}>
+            <div key={store}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{
-                      background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS],
-                    }}
-                  />
-                  <span className="text-xs font-medium text-gray-700">{group}</span>
-                  <span className="text-xs text-gray-400">
-                    ({group === '直营组' ? '3家' : '7家'})
-                  </span>
+                  <span className="w-2 h-2 rounded-full" style={{ background: storeColor }} />
+                  <span className="text-xs font-medium text-gray-700 truncate max-w-[110px]">{store}</span>
+                  <span className="text-xs text-gray-400">({isDirect ? '直营' : '商超'})</span>
                 </div>
                 <span className="font-mono text-xs text-gray-700">
                   净需求{' '}
                   <span className="text-blue-600 font-semibold">{netNeed.toLocaleString()}</span> 件
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1">
-                {seriesList
-                  .filter(sr => !(group === '商超组' && sr === '节日礼盒系列(直营店特供)'))
-                  .map(sr => {
-                    const d = groupDemand[group]?.[sr] ?? 0;
-                    const inv = groupInv[group]?.[sr] ?? 0;
-                    const net = Math.max(0, d - inv);
-                    return (
-                      <div
-                        key={sr}
-                        className="rounded px-1.5 py-1 text-center"
-                        style={{
-                          background: `${SERIES_COLORS[sr]}15`,
-                          border: `1px solid ${SERIES_COLORS[sr]}30`,
-                        }}
-                      >
-                        <div className="text-xs" style={{ color: SERIES_COLORS[sr] }}>
-                          {SERIES_ICONS[sr]}
-                        </div>
-                        <div
-                          className="font-mono text-xs font-semibold"
-                          style={{ color: SERIES_COLORS[sr] }}
-                        >
-                          {net}
-                        </div>
+              <div className="grid grid-cols-2 gap-1">
+                {seriesList.map(sr => {
+                  const skusInSeries = DATA.skus.filter(sku => DATA.sku_series[sku] === sr);
+                  const d = skusInSeries.reduce((s, sku) => s + (DATA.demand[store]?.[sku] ?? 0), 0);
+                  const inv = skusInSeries.reduce((s, sku) => s + (DATA.current_store_inventory[store]?.[sku] ?? 0), 0);
+                  const net = Math.max(0, d - inv);
+                  return (
+                    <div
+                      key={sr}
+                      className="rounded px-1.5 py-1 text-center"
+                      style={{
+                        background: `${SERIES_COLORS[sr]}15`,
+                        border: `1px solid ${SERIES_COLORS[sr]}30`,
+                      }}
+                    >
+                      <div className="text-xs" style={{ color: SERIES_COLORS[sr] }}>
+                        {SERIES_ICONS[sr]}
                       </div>
-                    );
-                  })}
+                      <div className="font-mono text-xs font-semibold" style={{ color: SERIES_COLORS[sr] }}>
+                        {net}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -656,7 +658,7 @@ function DecisionTable({
   const seriesList = VISIBLE_SERIES;
   const whInv = useMemo(() => aggregateWarehouseInventory(DATA), []);
   const whSafety = useMemo(() => aggregateSafetyStock(DATA), []);
-  const groups = ['直营组', '商超组'];
+  const groups = VISIBLE_STORES;
   // 计算各仓库已分配量（系列维度）
   const allocated = useMemo(() => {
     const result: Record<string, Record<string, number>> = {};
@@ -685,11 +687,11 @@ function DecisionTable({
         )}
       </div>
 
-      <div className="min-w-[700px]">
+      <div className="min-w-[500px]">
         {/* 表头 */}
           <div className="grid grid-cols-[140px_1fr] gap-2 mb-2">
           <div />
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-2 gap-1">
             {seriesList.map(series => (
               <div
                 key={series}
@@ -714,7 +716,7 @@ function DecisionTable({
             {/* 仓库标题行 */}
             <div className="flex items-center gap-2 mb-2 py-1 border-b border-gray-100">
               <span className="text-xs font-semibold text-blue-600 w-[140px] truncate">{wh}</span>
-              <div className="grid grid-cols-4 gap-1 flex-1">
+              <div className="grid grid-cols-2 gap-1 flex-1">
                 {seriesList.map(series => {
                   const inv = whInv[wh]?.[series] ?? 0;
                   const safety = whSafety[wh]?.[series] ?? 0;
@@ -735,23 +737,22 @@ function DecisionTable({
               </div>
             </div>
 
-            {/* 门店组行 */}
-            {groups.map(group => (
+            {/* 门店行 */}
+            {groups.map(group => {
+              const isDirectStore = DATA.direct_stores.includes(group);
+              const storeColor = isDirectStore ? '#6366f1' : '#0ea5e9';
+              return (
               <div key={group} className="grid grid-cols-[140px_1fr] gap-2 mb-2 items-center">
                 <div className="flex items-center gap-1.5">
                   <span
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{
-                      background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS],
-                    }}
+                    style={{ background: storeColor }}
                   />
-                  <span className="text-xs text-gray-500">{group}</span>
-
+                  <span className="text-xs text-gray-500 truncate max-w-[120px]">{group}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-1">
+                <div className="grid grid-cols-2 gap-1">
                   {seriesList.map(series => {
-                    const isDisabled =
-                      group === '商超组' && series === '节日礼盒系列(直营店特供)';
+                    const isDisabled = false;
                     const val = decisions[wh]?.[group]?.[series] ?? 0;
                     const inv = whInv[wh]?.[series] ?? 0;
                     const safety = whSafety[wh]?.[series] ?? 0;
@@ -782,7 +783,8 @@ function DecisionTable({
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ))}
       </div>
@@ -899,25 +901,21 @@ function ResultPanel({
       <div className="min-h-[160px]">
         {activeTab === 'overview' && (
           <div className="grid grid-cols-2 gap-3">
-            {['直营组', '商超组'].map(group => {
-              const gf = result.group_fulfillment[group];
-              const rate = gf?.rate ?? 0;
+            {VISIBLE_STORES.map(store => {
+              const sf = result.store_fulfillment[store];
+              const rate = sf?.fulfillment_rate ?? 0;
+              const isDirect = DATA.direct_stores.includes(store);
+              const storeColor = isDirect ? '#6366f1' : '#0ea5e9';
               return (
-                <div key={group} className="rounded-lg border border-gray-200 p-3">
+                <div key={store} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background: STORE_GROUP_COLORS[group as keyof typeof STORE_GROUP_COLORS],
-                      }}
-                    />
-                    <span className="text-xs font-medium text-gray-700">{group}</span>
+                    <span className="w-2 h-2 rounded-full" style={{ background: storeColor }} />
+                    <span className="text-xs font-medium text-gray-700 truncate max-w-[120px]">{store}</span>
+                    <span className="text-[10px] text-gray-400">({isDirect ? '直营' : '商超'})</span>
                   </div>
                   <div
                     className="font-mono text-2xl font-bold mb-1"
-                    style={{
-                      color: rate >= 95 ? '#16a34a' : rate >= 80 ? '#d97706' : '#dc2626',
-                    }}
+                    style={{ color: rate >= 95 ? '#16a34a' : rate >= 80 ? '#d97706' : '#dc2626' }}
                   >
                     {rate}%
                   </div>
@@ -931,60 +929,17 @@ function ResultPanel({
                     />
                   </div>
                   <div className="text-[10px] text-gray-400">
-                    满足 {gf?.fulfilled?.toLocaleString()} / {gf?.demand?.toLocaleString()} 件
+                    满足 {sf?.total_fulfilled?.toLocaleString()} / {sf?.total_demand?.toLocaleString()} 件
                   </div>
                 </div>
               );
             })}
-            {/* 各门店满足率 */}
-            <div className="col-span-2">
-              <div className="text-xs text-gray-400 mb-2">各门店满足率</div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                {DATA.stores.map(store => {
-                  const sf = result.store_fulfillment[store];
-                  const rate = sf?.fulfillment_rate ?? 0;
-                  const isDirect = DATA.direct_stores.includes(store);
-                  return (
-                    <div
-                      key={store}
-                      className={`rounded p-2 border text-center ${
-                        rate >= 95
-                          ? 'border-emerald-200 bg-emerald-50'
-                          : rate >= 80
-                          ? 'border-amber-200 bg-amber-50'
-                          : 'border-red-200 bg-red-50'
-                      }`}
-                    >
-                      <div className="text-[10px] text-gray-500 truncate">
-                        {store
-                          .replace('直营店', '')
-                          .replace('超市', '')
-                          .replace('(', '')
-                          .replace(')', '')}
-                      </div>
-                      <div
-                        className={`font-mono text-sm font-bold ${
-                          rate >= 95
-                            ? 'text-emerald-600'
-                            : rate >= 80
-                            ? 'text-amber-600'
-                            : 'text-red-600'
-                        }`}
-                      >
-                        {rate}%
-                      </div>
-                      <div className="text-[9px] text-gray-400">{isDirect ? '直营' : '商超'}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         )}
 
         {activeTab === 'series' && (
           <div className="space-y-2">
-            {result.series_summary.map(s => {
+            {result.series_summary.filter(s => VISIBLE_SERIES.includes(s.series)).map(s => {
               const rate =
                 s.total_demand > 0
                   ? Math.round(((s.total_demand - s.total_shortage) / s.total_demand) * 1000) / 10
@@ -1025,7 +980,7 @@ function ResultPanel({
 
         {activeTab === 'stores' && (
           <div className="space-y-2">
-            {VISIBLE_WAREHOUSES.map(wh => {
+            {DATA.warehouses.map(wh => {
               const usage = result.inventory_usage[wh];
               const c2 = result.constraint_status['C2'];
               const c2ViolWh = c2?.details?.filter(d => d.warehouse === wh) ?? [];
@@ -1079,7 +1034,9 @@ function ResultPanel({
 
         {activeTab === 'constraints' && (
           <div className="space-y-2">
-            {Object.entries(result.constraint_status).map(([key, status]) => (
+            {Object.entries(result.constraint_status)
+              .filter(([key]) => stage === 1 ? ['C1', 'C2'].includes(key) : true)
+              .map(([key, status]) => (
               <div
                 key={key}
                 className={`rounded-lg border p-3 ${
@@ -1148,7 +1105,7 @@ function ResultPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {result.stockout_details.slice(0, 20).map((d, i) => (
+                    {result.stockout_details.filter(d => VISIBLE_STORES.includes(d.store) && VISIBLE_SERIES.includes(d.series)).slice(0, 20).map((d, i) => (
                       <tr key={i} className="border-b border-gray-100">
                         <td className="py-1 pr-2 text-gray-500 truncate max-w-[80px]">{d.store}</td>
                         <td className="py-1 pr-2" style={{ color: SERIES_COLORS[d.series] }}>
@@ -1217,10 +1174,10 @@ export default function Home() {
     const d: SeriesGroupDecisions = {};
     for (const wh of VISIBLE_WAREHOUSES) {
       d[wh] = {};
-      for (const group of ['直营组', '商超组']) {
-        d[wh][group] = {};
+      for (const store of VISIBLE_STORES) {
+        d[wh][store] = {};
         for (const series of VISIBLE_SERIES) {
-          d[wh][group][series] = 0;
+          d[wh][store][series] = 0;
         }
       }
     }
@@ -1229,7 +1186,10 @@ export default function Home() {
   const emptyModes = useCallback((): TransportModeDecisions => {
     const m: TransportModeDecisions = {};
     for (const wh of VISIBLE_WAREHOUSES) {
-      m[wh] = { 直营组: 'box', 商超组: 'box' };
+      m[wh] = {};
+      for (const store of VISIBLE_STORES) {
+        m[wh][store] = 'box';
+      }
     }
     return m;
   }, []);
@@ -1330,6 +1290,9 @@ export default function Home() {
       {/* 两个柱状图 */}
       <ChartsRow />
 
+      {/* 图例说明与第一轮游戏说明之间的过渡文字 */}
+      <GameScopeNote />
+
       {/* 约束说明区 */}
       <ConstraintInfo stage={stage} />
 
@@ -1345,6 +1308,47 @@ export default function Home() {
 
           {/* 右侧决策区 */}
           <div className="space-y-4">
+            {/* 第二轮参数展示区（在决策输入上方） */}
+            {stage === 2 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="text-xs font-semibold text-amber-800 mb-3">[第二轮约束参数]</div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-amber-200">
+                      <th className="text-left py-1 pr-3">参数</th>
+                      <th className="text-left py-1 pr-3">门店</th>
+                      <th className="text-right py-1">数值</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-700">
+                    <tr className="border-b border-amber-100">
+                      <td className="py-1 pr-3 font-medium" rowSpan={2}>运输成本（元/件）</td>
+                      <td className="py-1 pr-3">南京东路直营店</td>
+                      <td className="py-1 text-right font-mono">奉贤4.2 / 嘉定4.68 / 松江5.28</td>
+                    </tr>
+                    <tr className="border-b border-amber-100">
+                      <td className="py-1 pr-3">大象超市(长宁店)</td>
+                      <td className="py-1 text-right font-mono">奉贤5.1 / 嘉定3.48 / 松江5.1</td>
+                    </tr>
+                    <tr className="border-b border-amber-100">
+                      <td className="py-1 pr-3 font-medium">月度预算（元）</td>
+                      <td className="py-1 pr-3">南京东路直营店</td>
+                      <td className="py-1 text-right font-mono">15,000</td>
+                    </tr>
+                    <tr className="border-b border-amber-100">
+                      <td className="py-1 pr-3 font-medium">商超合同上限（件）</td>
+                      <td className="py-1 pr-3">大象超市(长宁店)</td>
+                      <td className="py-1 text-right font-mono">1,800</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 pr-3 font-medium">仓储容量上限（件）</td>
+                      <td className="py-1 pr-3">南京东路直营店</td>
+                      <td className="py-1 text-right font-mono">800</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
             {/* 操作按钮栏 */}
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-bold text-gray-800 mr-2">运输决策输入</h3>
