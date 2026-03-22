@@ -101,24 +101,53 @@ export function calculate(
   }
 
   // C_short
+  // 总成本仍按 SKU 级精确计算，保持数字不变
   let cShort = 0;
-  const stockoutDetails: StockoutDetail[] = [];
   for (const store of stores) {
     for (const sku of skus) {
       const shortage = storeShortage[store][sku];
       if (shortage > 1e-6) {
+        cShort += shortage * (data.sku_penalty[sku] ?? 0);
+      }
+    }
+  }
+
+  // stockoutDetails 按"门店 + 系列"聚合：加权平均单位缺货成本
+  const stockoutDetails: StockoutDetail[] = [];
+  for (const store of stores) {
+    // 收集该门店涉及的所有系列
+    const seriesSet = Array.from(new Set<string>(skus.map(k => data.sku_series[k] ?? '').filter(Boolean)));
+    for (const series of seriesSet) {
+      const seriesSkus = skus.filter(k => (data.sku_series[k] ?? '') === series);
+      // 系列级聚合：求和
+      let seriesDemand = 0;
+      let seriesReceived = 0;
+      let seriesCurrentInv = 0;
+      let weightedPenaltyNumer = 0;  // 加权分子：Σ(demand × penalty)
+      let weightedPenaltyDenom = 0;  // 加权分母：Σdemand
+      for (const sku of seriesSkus) {
+        const d = data.demand[store]?.[sku] ?? 0;
+        const recv = warehouses.reduce((s, wh) => s + (skuDecisions[wh]?.[store]?.[sku] ?? 0), 0);
+        const ci = data.current_store_inventory[store]?.[sku] ?? 0;
         const gamma = data.sku_penalty[sku] ?? 0;
-        const cost = shortage * gamma;
-        cShort += cost;
+        seriesDemand += d;
+        seriesReceived += recv;
+        seriesCurrentInv += ci;
+        weightedPenaltyNumer += d * gamma;
+        weightedPenaltyDenom += d;
+      }
+      const seriesShortage = Math.max(0, seriesDemand - (seriesCurrentInv + seriesReceived));
+      if (seriesShortage > 1e-6) {
+        const avgPenalty = weightedPenaltyDenom > 0 ? weightedPenaltyNumer / weightedPenaltyDenom : 0;
+        const cost = seriesShortage * avgPenalty;
         stockoutDetails.push({
           store,
-          sku,
-          series: data.sku_series[sku] ?? '',
-          demand: data.demand[store]?.[sku] ?? 0,
-          current_inventory: data.current_store_inventory[store]?.[sku] ?? 0,
-          received: warehouses.reduce((s, wh) => s + (skuDecisions[wh]?.[store]?.[sku] ?? 0), 0),
-          shortfall: Math.round(shortage * 100) / 100,
-          penalty_per_unit: gamma,
+          series,
+          demand: Math.round(seriesDemand),
+          current_inventory: Math.round(seriesCurrentInv),
+          received: Math.round(seriesReceived),
+          shortfall: Math.round(seriesShortage * 100) / 100,
+          penalty_per_unit: Math.round(avgPenalty * 100) / 100,
           stockout_cost: Math.round(cost * 100) / 100,
         });
       }

@@ -1090,7 +1090,7 @@ function ResultPanel({
 
         {activeTab === 'details' && (
           <div>
-            {result.stockout_details.length === 0 ? (
+            {result.stockout_details.filter(d => VISIBLE_STORES.includes(d.store) && VISIBLE_SERIES.includes(d.series)).length === 0 ? (
               <div className="text-center py-8 text-gray-400 text-sm">🎉 无缺货记录</div>
             ) : (
               <div className="overflow-x-auto">
@@ -1105,29 +1105,23 @@ function ResultPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {result.stockout_details.filter(d => VISIBLE_STORES.includes(d.store) && VISIBLE_SERIES.includes(d.series)).slice(0, 20).map((d, i) => (
-                      <tr key={i} className="border-b border-gray-100">
-                        <td className="py-1 pr-2 text-gray-500 truncate max-w-[80px]">{d.store}</td>
-                        <td className="py-1 pr-2" style={{ color: SERIES_COLORS[d.series] }}>
-                          {SERIES_ICONS[d.series]}
-                          {d.series.replace('系列(直营店特供)', '').replace('系列', '')}
-                        </td>
-                        <td className="py-1 pr-2 text-right font-mono text-gray-700">{d.demand}</td>
-                        <td className="py-1 pr-2 text-right font-mono text-red-500">
-                          {d.shortfall}
-                        </td>
-                        <td className="py-1 text-right font-mono text-red-500">
-                          ¥{d.stockout_cost.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
+                    {result.stockout_details
+                      .filter(d => VISIBLE_STORES.includes(d.store) && VISIBLE_SERIES.includes(d.series))
+                      .map((d, i) => (
+                        <tr key={i} className="border-b border-gray-100">
+                          <td className="py-1 pr-2 text-gray-500 truncate max-w-[80px]">{d.store}</td>
+                          <td className="py-1 pr-2" style={{ color: SERIES_COLORS[d.series] }}>
+                            {SERIES_ICONS[d.series]}
+                            {d.series.replace('系列(直营店特供)', '').replace('系列', '')}
+                          </td>
+                          <td className="py-1 pr-2 text-right font-mono text-gray-700">{d.demand}</td>
+                          <td className="py-1 pr-2 text-right font-mono text-red-500">{d.shortfall}</td>
+                          <td className="py-1 text-right font-mono text-red-500">¥{d.stockout_cost.toFixed(2)}</td>
+                        </tr>
+                      ))
+                    }
                   </tbody>
                 </table>
-                {result.stockout_details.length > 20 && (
-                  <div className="text-center text-xs text-gray-400 mt-2">
-                    共 {result.stockout_details.length} 条，显示前 20 条
-                  </div>
-                )}
               </div>
             )}
           </div>

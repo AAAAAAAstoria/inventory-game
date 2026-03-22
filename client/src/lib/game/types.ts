@@ -91,7 +91,7 @@ export interface InventoryUsage {
 
 export interface StockoutDetail {
   store: string;
-  sku: string;
+  sku?: string;          // SKU级展示时使用；系列级聚合时为空
   series: string;
   demand: number;
   current_inventory: number;
