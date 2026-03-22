@@ -140,10 +140,12 @@ export function calculate(
       if (seriesShortage > 1e-6) {
         const avgPenalty = weightedPenaltyDenom > 0 ? weightedPenaltyNumer / weightedPenaltyDenom : 0;
         const cost = seriesShortage * avgPenalty;
+        // demand 展示净需求（总需求 - 当前库存），与门店概览卡片保持一致
+        const netDemand = Math.max(0, seriesDemand - seriesCurrentInv);
         stockoutDetails.push({
           store,
           series,
-          demand: Math.round(seriesDemand),
+          demand: Math.round(netDemand),
           current_inventory: Math.round(seriesCurrentInv),
           received: Math.round(seriesReceived),
           shortfall: Math.round(seriesShortage * 100) / 100,

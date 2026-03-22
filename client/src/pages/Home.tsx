@@ -1099,7 +1099,7 @@ function ResultPanel({
                     <tr className="text-gray-400 border-b border-gray-200">
                       <th className="text-left py-1.5 pr-2">门店</th>
                       <th className="text-left py-1.5 pr-2">系列</th>
-                      <th className="text-right py-1.5 pr-2">需求</th>
+                      <th className="text-right py-1.5 pr-2">净需求</th>
                       <th className="text-right py-1.5 pr-2">缺货</th>
                       <th className="text-right py-1.5">缺货成本</th>
                     </tr>
