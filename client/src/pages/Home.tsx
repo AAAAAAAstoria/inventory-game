@@ -42,12 +42,54 @@ import {
 
 const DATA = RAW_GAME_DATA as unknown as GameData;
 
+// ─── 游戏计算覆盖数据（仅影响游戏计算，不影响图表和全局展示）
+// 修改直营门店缺货成本：经典夹心 13.3，精致甜点 11.95
+// 库存缩放：游戏场景总需求 1528 件，目标库存 = 1528 × 0.85 ≈ 1299 件
+const GAME_DATA: GameData = (() => {
+  // 直营门店系列级缺货成本覆盖（仅对游戏中的直营门店生效）
+  const DIRECT_STORE = '南京东路直营店';
+  const SERIES_PENALTY_OVERRIDE: Record<string, number> = {
+    '经典夹心系列': 13.3,   // 直营门店经典夹心系列缺货成本
+    '精致甜点系列': 11.95,  // 直营门店精致甜点系列缺货成圬
+  };
+  // 构建覆盖后的 sku_penalty：直营门店的游戏系列 SKU 使用新成本，其他保持原値
+  const overridePenalty: Record<string, number> = { ...DATA.sku_penalty };
+  for (const [series, newPenalty] of Object.entries(SERIES_PENALTY_OVERRIDE)) {
+    const seriesSkus = DATA.skus.filter(sku => DATA.sku_series[sku] === series);
+    // 直营门店的这些 SKU 使用新成本：将原始 penalty 替换为系列级单价
+    // （因为 engine 按 SKU 计算，我们用系列级单价覆盖所有该系列 SKU）
+    for (const sku of seriesSkus) {
+      overridePenalty[sku] = newPenalty;
+    }
+  }
+  // 库存缩放：游戏场景总需求 1528，目标 = 1528 × 0.85 = 1298.8 ≈ 1299 件
+  // 当前两仓库游戏系列总库存 4818，缩放比例 = 1299 / 4818 ≈ 0.2696
+  const GAME_WAREHOUSES = ['上海奉贤仓储中心', '嘉定配送中心'];
+  const GAME_SERIES = ['精致甜点系列', '经典夹心系列'];
+  const SCALE_RATIO = 0.2696; // 1299 / 4818
+  const overrideWarehouseInv: Record<string, Record<string, number>> = {};
+  for (const wh of DATA.warehouses) {
+    overrideWarehouseInv[wh] = { ...(DATA.warehouse_inventory[wh] ?? {}) };
+    if (GAME_WAREHOUSES.includes(wh)) {
+      // 只缩放游戏系列的库存，其他系列保持原値
+      for (const sku of DATA.skus) {
+        if (GAME_SERIES.includes(DATA.sku_series[sku] ?? '')) {
+          overrideWarehouseInv[wh][sku] = Math.round((DATA.warehouse_inventory[wh]?.[sku] ?? 0) * SCALE_RATIO);
+        }
+      }
+    }
+  }
+  return {
+    ...DATA,
+    sku_penalty: overridePenalty,
+    warehouse_inventory: overrideWarehouseInv,
+  };
+})();
+
 // ─── 游戏决策使用的2个系列（精致甜点+经典夹心，受第二轮约束影响最大）
 const VISIBLE_SERIES = ['精致甜点系列', '经典夹心系列'];
-
-// ─── 游戏决策使用的2个门店（1个直营+1个商超）
+// ─── 游戏决策使用的2个门店（1个直营+1个商败）
 const VISIBLE_STORES = ['南京东路直营店', '大象超市(长宁店)'];
-
 // ─── 界面可见仓库（只展示前两个，松江物流园不在决策界面显示）
 const VISIBLE_WAREHOUSES = ['上海奉贤仓储中心', '嘉定配送中心'];
 
@@ -1232,9 +1274,9 @@ export default function Home() {
     // 使用 setTimeout 避免阻塞 UI
     setTimeout(() => {
       try {
-        const skuDecisions = expandDecisions(decisions, DATA);
-        const storeModes = expandTransportModes(transportModes, DATA);
-        const res = calculate(stage, skuDecisions, storeModes, DATA);
+        const skuDecisions = expandDecisions(decisions, GAME_DATA);
+        const storeModes = expandTransportModes(transportModes, GAME_DATA);
+        const res = calculate(stage, skuDecisions, storeModes, GAME_DATA);
         setResult(res);
         if (res.valid) {
           toast.success(
