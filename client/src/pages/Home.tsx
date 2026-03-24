@@ -49,8 +49,8 @@ const GAME_DATA: GameData = (() => {
   // 直营门店系列级缺货成本覆盖（仅对游戏中的直营门店生效）
   const DIRECT_STORE = '南京东路直营店';
   const SERIES_PENALTY_OVERRIDE: Record<string, number> = {
-    '经典夹心系列': 13.3,   // 直营门店经典夹心系列缺货成本
-    '精致甜点系列': 11.95,  // 直营门店精致甜点系列缺货成圬
+    '经典夹心系列': 11.95,  // 直营门店经典夹心系列缺货成本
+    '精致甜点系列': 13.3,   // 直营门店精致甜点系列缺货成本
   };
   // 构建覆盖后的 sku_penalty：直营门店的游戏系列 SKU 使用新成本，其他保持原値
   const overridePenalty: Record<string, number> = { ...DATA.sku_penalty };
