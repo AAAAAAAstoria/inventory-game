@@ -944,8 +944,14 @@ function ResultPanel({
         {activeTab === 'overview' && (
           <div className="grid grid-cols-2 gap-3">
             {VISIBLE_STORES.map(store => {
-              const sf = result.store_fulfillment[store];
-              const rate = sf?.fulfillment_rate ?? 0;
+              // 只统计游戏中使用的2个系列的需求与满足量
+              const storeDetails = result.stockout_details.filter(
+                d => d.store === store && VISIBLE_SERIES.includes(d.series)
+              );
+              const gameDemand = storeDetails.reduce((s, d) => s + d.demand, 0);
+              const gameReceived = storeDetails.reduce((s, d) => s + d.received, 0);
+              const gameFulfilled = Math.min(gameReceived, gameDemand);
+              const rate = gameDemand > 0 ? Math.round((gameFulfilled / gameDemand) * 1000) / 10 : 100;
               const isDirect = DATA.direct_stores.includes(store);
               const storeColor = isDirect ? '#6366f1' : '#0ea5e9';
               return (
@@ -970,8 +976,23 @@ function ResultPanel({
                       }}
                     />
                   </div>
-                  <div className="text-[10px] text-gray-400">
-                    满足 {sf?.total_fulfilled?.toLocaleString()} / {sf?.total_demand?.toLocaleString()} 件
+                  <div className="text-[10px] text-gray-400 mb-2">
+                    满足 {Math.round(gameFulfilled).toLocaleString()} / {Math.round(gameDemand).toLocaleString()} 件
+                  </div>
+                  {/* 系列细分 */}
+                  <div className="space-y-1">
+                    {VISIBLE_SERIES.map(series => {
+                      const sd = storeDetails.find(d => d.series === series);
+                      const sDemand = sd?.demand ?? 0;
+                      const sReceived = sd?.received ?? 0;
+                      const sFulfilled = Math.min(sReceived, sDemand);
+                      return (
+                        <div key={series} className="flex items-center justify-between text-[10px] text-gray-500">
+                          <span>{SERIES_ICONS[series]} {series.replace('系列', '')}</span>
+                          <span className="font-mono">{Math.round(sFulfilled)} / {Math.round(sDemand)} 件</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
