@@ -564,8 +564,8 @@ function Stage2ConstraintsPanel() {
 
 // ─── 子组件：仓库库存侧边卡片 ──────────────────────────────────
 function WarehousePanel({ stage }: { stage: 1 | 2 }) {
-  const whInv = useMemo(() => aggregateWarehouseInventory(DATA), []);
-  const whSafety = useMemo(() => aggregateSafetyStock(DATA), []);
+  const whInv = useMemo(() => aggregateWarehouseInventory(GAME_DATA), []);
+  const whSafety = useMemo(() => aggregateSafetyStock(GAME_DATA), []);
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
@@ -698,8 +698,8 @@ function DecisionTable({
   onModeChange: (wh: string, group: string, mode: 'box' | 'pallet') => void;
 }) {
   const seriesList = VISIBLE_SERIES;
-  const whInv = useMemo(() => aggregateWarehouseInventory(DATA), []);
-  const whSafety = useMemo(() => aggregateSafetyStock(DATA), []);
+  const whInv = useMemo(() => aggregateWarehouseInventory(GAME_DATA), []);
+  const whSafety = useMemo(() => aggregateSafetyStock(GAME_DATA), []);
   const groups = VISIBLE_STORES;
   // 计算各仓库已分配量（系列维度）
   const allocated = useMemo(() => {
@@ -1376,10 +1376,19 @@ export default function Home() {
                       <td className="py-1 pr-3">大象超市(长宁店)</td>
                       <td className="py-1 text-right font-mono">1,800</td>
                     </tr>
-                    <tr>
+                    <tr className="border-b border-amber-100">
                       <td className="py-1 pr-3 font-medium">仓储容量上限（件）</td>
                       <td className="py-1 pr-3">南京东路直营店</td>
                       <td className="py-1 text-right font-mono">800</td>
+                    </tr>
+                    <tr className="border-b border-amber-100">
+                      <td className="py-1 pr-3 font-medium" rowSpan={2}>缺货成本（元/件）</td>
+                      <td className="py-1 pr-3">南京东路直营店</td>
+                      <td className="py-1 text-right font-mono">精致甜点13.3 / 经典夹心11.95</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 pr-3">大象超市(长宁店)</td>
+                      <td className="py-1 text-right font-mono">精致甜点6.3 / 经典夹心4.95</td>
                     </tr>
                   </tbody>
                 </table>
