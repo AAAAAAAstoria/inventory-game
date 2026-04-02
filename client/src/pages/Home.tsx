@@ -1002,37 +1002,59 @@ function ResultPanel({
 
         {activeTab === 'series' && (
           <div className="space-y-2">
-            {result.series_summary.filter(s => VISIBLE_SERIES.includes(s.series)).map(s => {
+            {VISIBLE_SERIES.map(seriesName => {
+              // 只从 stockout_details 中聚合游戏 2门店×当前系列 的数据
+              const rows = result.stockout_details.filter(
+                d => d.series === seriesName && VISIBLE_STORES.includes(d.store)
+              );
+              const totalDemand = rows.reduce((sum, d) => sum + d.demand, 0);
+              const totalReceived = rows.reduce((sum, d) => sum + d.received, 0);
+              const totalShortfall = rows.reduce((sum, d) => sum + d.shortfall, 0);
+              const totalShortageCost = rows.reduce((sum, d) => sum + d.stockout_cost, 0);
               const rate =
-                s.total_demand > 0
-                  ? Math.round(((s.total_demand - s.total_shortage) / s.total_demand) * 1000) / 10
+                totalDemand > 0
+                  ? Math.round((totalReceived / totalDemand) * 1000) / 10
                   : 100;
+              // 每个门店的系列细分
+              const storeBreakdown = VISIBLE_STORES.map(store => {
+                const r = rows.find(d => d.store === store);
+                return { store, demand: r?.demand ?? 0, received: r?.received ?? 0 };
+              });
               return (
                 <div
-                  key={s.series}
+                  key={seriesName}
                   className="flex items-center gap-3 rounded-lg p-2 border border-gray-100"
                 >
-                  <span className="text-lg w-7 text-center">{SERIES_ICONS[s.series]}</span>
+                  <span className="text-lg w-7 text-center">{SERIES_ICONS[seriesName]}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <span
                         className="text-xs font-medium"
-                        style={{ color: SERIES_COLORS[s.series] }}
+                        style={{ color: SERIES_COLORS[seriesName] }}
                       >
-                        {s.series.replace('系列(直营店特供)', '★').replace('系列', '')}
+                        {seriesName.replace('系列(直营店特供)', '★').replace('系列', '')}
                       </span>
                       <span className="font-mono text-xs text-gray-700">{rate}% 满足</span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${rate}%`, background: SERIES_COLORS[s.series] }}
+                        style={{ width: `${rate}%`, background: SERIES_COLORS[seriesName] }}
                       />
                     </div>
                     <div className="flex gap-3 mt-1 text-[10px] text-gray-400">
-                      <span>缺货 {s.total_shortage} 件</span>
-                      <span>缺货成本 ¥{s.shortage_cost.toFixed(0)}</span>
-                      <span>持货成本 ¥{s.hold_cost.toFixed(0)}</span>
+                      <span>净需求 {totalDemand} 件</span>
+                      <span>缺货 {Math.round(totalShortfall)} 件</span>
+                      <span>缺货成本 ¥{totalShortageCost.toFixed(0)}</span>
+                    </div>
+                    {/* 门店细分 */}
+                    <div className="mt-1 space-y-0.5">
+                      {storeBreakdown.map(({ store, demand, received }) => (
+                        <div key={store} className="flex justify-between text-[10px] text-gray-400 pl-1">
+                          <span>{store}</span>
+                          <span className="font-mono">{received} / {demand} 件</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
