@@ -1402,6 +1402,11 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
           {/* 左侧信息面板 */}
           <div className="space-y-4">
+            {stage === 2 && (
+              <div className="bg-white border border-gray-200 rounded-xl p-4 text-xs text-gray-700 leading-relaxed">
+                在真实零售业务中，不同类型门店的约束来源是不同的。对于像大象超市这样的<strong>商超</strong>，通常会与供应商签订采购合同，因此存在明确的<strong>进货上限</strong>，企业必须遵守合同约定，否则可能面临风险。而直营门店由公司自营，没有外部合同限制，但会受到<strong>门店仓储容量</strong>的限制，同时其销售直接影响公司利润和品牌形象。因此，一旦直营门店缺货，会带来更高的机会损失和客户流失风险，所以其<strong>缺货成本显著高于商超</strong>。
+              </div>
+            )}
             <WarehousePanel stage={stage} />
             <DemandPanel />
 
