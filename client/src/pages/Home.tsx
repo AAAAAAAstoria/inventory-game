@@ -1044,18 +1044,40 @@ function ResultPanel({
         {activeTab === 'stores' && (
           <div className="space-y-2">
             {VISIBLE_WAREHOUSES.map(wh => {
-              const usage = result.inventory_usage[wh];
-              const c2 = result.constraint_status['C2'];
-              const c2ViolWh = c2?.details?.filter(d => d.warehouse === wh) ?? [];
+              // 游戏场景：只统计 VISIBLE_SERIES 下的 SKU
+              const gameSkus = GAME_DATA.skus.filter(
+                sku => VISIBLE_SERIES.includes(GAME_DATA.sku_series[sku] ?? '')
+              );
+              // 月初库存：来自 GAME_DATA（已缩放）
+              const gameInitInv = gameSkus.reduce(
+                (sum, sku) => sum + (GAME_DATA.warehouse_inventory[wh]?.[sku] ?? 0), 0
+              );
+              // 月末剩余：来自 result.warehouse_remaining（engine 用 GAME_DATA 计算）
+              const gameRemaining = gameSkus.reduce(
+                (sum, sku) => sum + Math.max(0, result.warehouse_remaining[wh]?.[sku] ?? 0), 0
+              );
+              // 已发货 = 月初库存 - 月末剩余
+              const gameSent = Math.max(0, Math.round(gameInitInv - gameRemaining));
+              const gameUtilRate = gameInitInv > 0
+                ? Math.round((gameSent / gameInitInv) * 1000) / 10
+                : 0;
+              // 安全库存下限（游戏SKU）
+              const gameSafety = gameSkus.reduce(
+                (sum, sku) => sum + (GAME_DATA.safety_stock[wh]?.[sku] ?? 0), 0
+              );
+              // 安全库存违规：游戏SKU中月末剩余低于安全库存的数量
+              const safetyViolCount = gameSkus.filter(
+                sku => (result.warehouse_remaining[wh]?.[sku] ?? 0) < (GAME_DATA.safety_stock[wh]?.[sku] ?? 0)
+              ).length;
               return (
                 <div key={wh} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-gray-700">{wh}</span>
                     <span
-                      className={`font-mono text-xs ${c2ViolWh.length > 0 ? 'text-amber-600' : 'text-emerald-600'}`}
+                      className={`font-mono text-xs ${safetyViolCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}
                     >
-                      {c2ViolWh.length > 0
-                        ? `⚠ ${c2ViolWh.length} SKU低于安全库存`
+                      {safetyViolCount > 0
+                        ? `⚠ ${safetyViolCount} SKU低于安全库存`
                         : '✓ 安全库存满足'}
                     </span>
                   </div>
@@ -1063,31 +1085,31 @@ function ResultPanel({
                     <div>
                       <div className="text-gray-400">月初库存</div>
                       <div className="font-mono font-semibold text-gray-700">
-                        {usage?.total_available?.toLocaleString()}
+                        {gameInitInv.toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div className="text-gray-400">已发货</div>
                       <div className="font-mono font-semibold text-blue-600">
-                        {usage?.total_sent?.toLocaleString()}
+                        {gameSent.toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div className="text-gray-400">月末剩余</div>
                       <div className="font-mono font-semibold text-gray-700">
-                        {usage?.total_remaining?.toLocaleString()}
+                        {Math.round(gameRemaining).toLocaleString()}
                       </div>
                     </div>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${usage?.utilization_rate ?? 0}%`, background: '#2563eb' }}
+                      style={{ width: `${gameUtilRate}%`, background: '#2563eb' }}
                     />
                   </div>
                   <div className="text-[10px] text-gray-400 mt-1">
-                    库存利用率 {usage?.utilization_rate}% | 安全库存下限{' '}
-                    {usage?.total_safety_stock?.toLocaleString()} 件
+                    库存利用率 {gameUtilRate}% | 安全库存下限{' '}
+                    {Math.round(gameSafety).toLocaleString()} 件
                   </div>
                 </div>
               );
